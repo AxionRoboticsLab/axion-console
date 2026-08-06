@@ -4,6 +4,10 @@ export default {
   ok: 'OK',
   cancel: 'Cancel',
 
+  toolbar_fullscreen: 'Fullscreen',
+  toolbar_settings: 'Settings',
+  toolbar_reload: 'Reload',
+
   home: 'Home',
   home_description: 'Overview and shortcuts',
 

@@ -4,6 +4,10 @@ export default {
   ok: '确认',
   cancel: '取消',
 
+  toolbar_fullscreen: '全屏',
+  toolbar_settings: '设置',
+  toolbar_reload: '同步 / 刷新',
+
   home: '首页',
   home_description: '总览与快捷入口',
 

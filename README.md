@@ -50,6 +50,16 @@ quasar build
 # serve dist/spa behind Nginx
 ```
 
+## Build && Release
+```
+cd ~/workspace/axion-console
+yarn   # 或 npm i
+quasar build
+
+sudo mkdir -p /var/www/axion-console
+sudo rsync -a --delete dist/spa/ /var/www/axion-console/
+```
+
 ## Related
 - Runtime: [axion-edge-agent]([https://github.com/%3CORG%3E/](https://github.com/AxionRoboticsLab/axion-edge-agent)
 - Upstream UI reference: [legubiao/ros2d-quasar](https://github.com/legubiao/ros2d-quasar)
