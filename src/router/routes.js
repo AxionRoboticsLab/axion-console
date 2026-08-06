@@ -1,19 +1,40 @@
+/**
+ * Copy pieces into axion-console as needed.
+ * Suggested route tree for 4 modules + secondary pages.
+ */
+
 const routes = [
   {
     path: '/',
     component: () => import('layouts/MainLayout.vue'),
     children: [
       { path: '', name: 'main', component: () => import('pages/IndexPage.vue') },
-      { path: 'amr', name: 'amr_2d', component: () => import('pages/AmrControl.vue') },
-      { path: 'service', name: 'service', component: () => import('pages/RosService.vue') },
-      { path: 'param', name: 'param', component: () => import('pages/RosParam.vue') },
-      { path: 'joystick', name: 'joystick', component: () => import('pages/JoystickPage.vue') },
-      { path: 'setting', name: 'setting', component: () => import('pages/SettingPage.vue') }
+
+      // ---- Robot (existing pages moved under /robot) ----
+      { path: 'robot', redirect: '/robot/amr' },
+      { path: 'robot/amr', name: 'robot_amr', component: () => import('pages/AmrControl.vue') },
+      { path: 'robot/joystick', name: 'robot_joystick', component: () => import('pages/JoystickPage.vue') },
+      { path: 'robot/service', name: 'robot_service', component: () => import('pages/RosService.vue') },
+      { path: 'robot/param', name: 'robot_param', component: () => import('pages/RosParam.vue') },
+      { path: 'robot/setting', name: 'robot_setting', component: () => import('pages/SettingPage.vue') },
+
+      // ---- VMS ----
+      { path: 'vms', redirect: '/vms/versions' },
+      { path: 'vms/versions', name: 'vms_versions', component: () => import('pages/vms/VersionsPage.vue') },
+      { path: 'vms/ci', name: 'vms_ci', component: () => import('pages/vms/CiPage.vue') },
+      { path: 'vms/cd', name: 'vms_cd', component: () => import('pages/vms/CdPage.vue') },
+
+      // ---- Autotest ----
+      { path: 'autotest', redirect: '/autotest/runs' },
+      { path: 'autotest/runs', name: 'autotest_runs', component: () => import('pages/autotest/RunsPage.vue') },
+
+      // ---- Users ----
+      { path: 'users', redirect: '/users/list' },
+      { path: 'users/list', name: 'users_list', component: () => import('pages/users/UsersPage.vue') },
+      { path: 'users/roles', name: 'users_roles', component: () => import('pages/users/RolesPage.vue') },
+      { path: 'users/permissions', name: 'users_permissions', component: () => import('pages/users/PermissionsPage.vue') }
     ]
   },
-
-  // Always leave this as last one,
-  // but you can also remove it
   {
     path: '/:catchAll(.*)*',
     component: () => import('pages/ErrorNotFound.vue')

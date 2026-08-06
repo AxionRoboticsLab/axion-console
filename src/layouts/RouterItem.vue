@@ -1,14 +1,6 @@
 <template>
-  <q-item
-    clickable
-    tag="a"
-    target="_blank"
-    @click="handleClick(link)"
-  >
-    <q-item-section
-      v-if="icon"
-      avatar
-    >
+  <q-item clickable v-ripple @click="handleClick(link)">
+    <q-item-section avatar v-if="icon">
       <q-icon :name="icon" />
     </q-item-section>
 
@@ -25,25 +17,12 @@ import { useRouter } from 'vue-router'
 export default {
   name: 'RouterItem',
   props: {
-    title: {
-      type: String
-    },
-
-    caption: {
-      type: String,
-      default: ''
-    },
-
-    link: {
-      type: String,
-      default: '#'
-    },
-
-    icon: {
-      type: String,
-      default: ''
-    }
+    title: { type: String },
+    caption: { type: String, default: '' },
+    link: { type: String, default: '/' },
+    icon: { type: String, default: '' }
   },
+  emits: ['close-drawer'],
   setup (props, context) {
     const router = useRouter()
     return {
