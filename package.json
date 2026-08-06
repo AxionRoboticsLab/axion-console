@@ -1,0 +1,47 @@
+{
+  "name": "ros2d-quasar",
+  "version": "0.0.1",
+  "description": " A Quasar frontend for ROS/ROS2",
+  "productName": "ROS2D Quasar",
+  "author": "Zhenbiao Huang <biao876990970@hotmail.com>",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "lint": "eslint --ext .js,.vue ./",
+    "test": "echo \"No test specified\" && exit 0",
+    "dev": "quasar dev",
+    "build": "quasar build"
+  },
+  "dependencies": {
+    "@pixi/utils": "^7.4.2",
+    "@quasar/extras": "^1.16.4",
+    "axios": "^1.2.1",
+    "nipplejs": "^0.10.2",
+    "pinia": "^2.0.11",
+    "pinia-plugin-persist": "^1.0.0",
+    "pixi.js": "^8.5.2",
+    "quasar": "^2.16.0",
+    "uuid": "^11.0.2",
+    "vue": "^3.4.18",
+    "vue-i18n": "^9.0.0",
+    "vue-router": "^4.0.0"
+  },
+  "devDependencies": {
+    "@intlify/unplugin-vue-i18n": "^2.0.0",
+    "@quasar/app-vite": "^2.0.0-beta.12",
+    "autoprefixer": "^10.4.2",
+    "eslint": "^8.57.0",
+    "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.19.1",
+    "eslint-plugin-n": "^15.0.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "eslint-plugin-vue": "^9.0.0",
+    "postcss": "^8.4.14",
+    "vite-plugin-checker": "^0.8.0"
+  },
+  "engines": {
+    "node": "^24 || ^22 || ^20 || ^18",
+    "npm": ">= 6.13.4",
+    "yarn": ">= 1.21.1"
+  }
+}
