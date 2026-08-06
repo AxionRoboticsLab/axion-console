@@ -4,11 +4,10 @@
       <q-toolbar>
         <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
 
-        <q-toolbar-title>
-          {{ headerTitle }}
+        <q-toolbar-title class="row items-center q-gutter-sm">
+          <q-icon name="smart_toy" size="28px" />
+          <span class="text-weight-bold">{{ brandName }}</span>
         </q-toolbar-title>
-
-        <div>Axion Console</div>
       </q-toolbar>
     </q-header>
 
@@ -17,6 +16,15 @@
         <q-item-label header>
           {{ t('menu') }}
         </q-item-label>
+
+        <!-- Home: single entry, no expansion needed -->
+        <RouterItem
+          title="home"
+          caption="home_description"
+          icon="home"
+          link="/"
+          @close-drawer="leftDrawerOpen = false"
+        />
 
         <q-expansion-item
           v-for="mod in modules"
@@ -48,8 +56,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Links from 'src/router/Links'
 import RouterItem from 'layouts/RouterItem.vue'
@@ -58,16 +65,14 @@ defineOptions({
   name: 'MainLayout'
 })
 
+// Brand shown in header (change anytime)
+const brandName = 'AXION'
+
 const leftDrawerOpen = ref(true)
 const { t } = useI18n()
-const $route = useRoute()
-const modules = Links('modules')
 
-const headerTitle = computed(() => {
-  const key = 'router_' + $route.name
-  const translated = t(key)
-  return translated === key ? t('menu') : translated
-})
+// exclude home from expansion list (rendered separately above)
+const modules = Links('modules').filter((m) => m.id !== 'home')
 
 function toggleLeftDrawer () {
   leftDrawerOpen.value = !leftDrawerOpen.value

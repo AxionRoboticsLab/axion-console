@@ -11,9 +11,24 @@ export default function (type) {
 
 const moduleLinks = [
   {
+    id: 'home',
+    title: 'home',
+    caption: 'home_description',
+    icon: 'home',
+    link: '/',
+    children: [
+      {
+        title: 'home',
+        caption: 'home_description',
+        icon: 'dashboard',
+        link: '/'
+      }
+    ]
+  },
+  {
     id: 'robot',
-    title: 'nav_robot',
-    caption: 'nav_robot_description',
+    title: 'robot',
+    caption: 'robot_description',
     icon: 'smart_toy',
     link: '/robot',
     children: [
@@ -51,68 +66,68 @@ const moduleLinks = [
   },
   {
     id: 'vms',
-    title: 'nav_vms',
-    caption: 'nav_vms_description',
+    title: 'vms',
+    caption: 'vms_description',
     icon: 'inventory_2',
     link: '/vms',
     children: [
       {
-        title: 'nav_vms_versions',
-        caption: 'nav_vms_versions_description',
+        title: 'vms_versions',
+        caption: 'vms_versions_description',
         icon: 'new_releases',
         link: '/vms/versions'
       },
       {
-        title: 'nav_vms_ci',
-        caption: 'nav_vms_ci_description',
+        title: 'vms_ci',
+        caption: 'vms_ci_description',
         icon: 'cloud_sync',
         link: '/vms/ci'
       },
       {
-        title: 'nav_vms_cd',
-        caption: 'nav_vms_cd_description',
+        title: 'vms_cd',
+        caption: 'vms_cd_description',
         icon: 'rocket_launch',
         link: '/vms/cd'
       }
     ]
   },
   {
-    id: 'autotest',
-    title: 'nav_autotest',
-    caption: 'nav_autotest_description',
+    id: 'test_center',
+    title: 'test_center',
+    caption: 'test_center_description',
     icon: 'verified',
     link: '/autotest',
     children: [
       {
-        title: 'nav_autotest_runs',
-        caption: 'nav_autotest_runs_description',
+        title: 'test_center_runs',
+        caption: 'test_center_runs_description',
         icon: 'playlist_add_check',
         link: '/autotest/runs'
       }
     ]
   },
   {
-    id: 'users',
-    title: 'nav_users',
-    caption: 'nav_users_description',
+    id: 'user_center',
+    title: 'user_center',
+    caption: 'user_center_description',
     icon: 'manage_accounts',
     link: '/users',
     children: [
       {
-        title: 'nav_users_list',
-        caption: 'nav_users_list_description',
+        title: 'user_center_users',
+        caption: 'user_center_users_description',
         icon: 'group',
         link: '/users/list'
       },
       {
-        title: 'nav_users_roles',
-        caption: 'nav_users_roles_description',
+        title: 'user_center_roles',
+        caption: 'user_center_roles_description',
         icon: 'badge',
         link: '/users/roles'
       },
       {
-        title: 'nav_users_permissions',
-        caption: 'nav_users_permissions_description',
+        title: 'user_center_permissions',
+        caption: 'user_center_permissions_description',
         icon: 'admin_panel_settings',
         link: '/users/permissions'
       }

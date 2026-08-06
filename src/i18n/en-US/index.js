@@ -1,21 +1,51 @@
-// This is just an example,
-// so you can safely delete all default props below
-
+// Axion Console — en-US
 export default {
   menu: 'Menu',
-  ok: 'ok',
-  cancel: 'cancel',
+  ok: 'OK',
+  cancel: 'Cancel',
+
+  home: 'Home',
+  home_description: 'Overview and shortcuts',
 
   notify_ros_connect: 'Connect to ROS Successfully',
   notify_ros_release: 'Release Connection with ROS',
 
-  router_setting: 'Setting',
-  router_amr_2d: '2D AMR Control',
-  router_amr_2d_description: 'Mapping, Navigation and Joystick control',
-  router_service: 'Call ROS Service',
-  router_service_description: 'A test page for calling arbitrary ROS Service',
-  router_joystick: 'Joystick Control',
-  router_joystick_description: 'A simply page for Virtual Joystick',
+  robot: 'Robot',
+  robot_description: 'Teleop, map and ROS tools',
+
+  vms: 'VMS',
+  vms_description: 'Versions, release and pipelines',
+  vms_versions: 'Versions',
+  vms_versions_description: 'Create and view versions',
+  vms_ci: 'CI',
+  vms_ci_description: 'Build and pipeline results',
+  vms_cd: 'CD',
+  vms_cd_description: 'Release and deploy history',
+
+  test_center: 'Test Center',
+  test_center_description: 'One-click functional checks',
+  test_center_runs: 'Test Runs',
+  test_center_runs_description: 'Start and review verification',
+
+  user_center: 'User Center',
+  user_center_description: 'Users, roles and permissions',
+  user_center_users: 'Users',
+  user_center_users_description: 'Query and manage users',
+  user_center_roles: 'Roles',
+  user_center_roles_description: 'Role membership',
+  user_center_permissions: 'Permissions',
+  user_center_permissions_description: 'Menu and API permissions',
+
+  router_setting: 'Connection Settings',
+  router_setting_description: 'ROS / robot connection',
+  router_amr_2d: '2D Console',
+  router_amr_2d_description: 'Map and navigation control',
+  router_service: 'ROS Service',
+  router_service_description: 'Call ROS services',
+  router_joystick: 'Joystick',
+  router_joystick_description: 'Virtual joystick teleop',
+  router_param: 'ROS Params',
+  router_param_description: 'Dynamic ROS parameters',
 
   setting_amr_ip: 'AMR IP',
   setting_ros_version: 'ROS Version',

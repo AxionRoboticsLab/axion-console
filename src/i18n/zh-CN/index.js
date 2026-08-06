@@ -1,38 +1,41 @@
-// This is just an example,
-// so you can safely delete all default props below
+// Axion Console — zh-CN
 export default {
   menu: '功能菜单',
   ok: '确认',
   cancel: '取消',
 
+  home: '首页',
+  home_description: '总览与快捷入口',
+
   notify_ros_connect: '已建立与ROS的连接',
   notify_ros_release: '已释放与ROS的连接',
 
-  // ---- top modules ----
-  nav_robot: '机器人',
-  nav_robot_description: '遥控、地图与 ROS 调试',
-  nav_vms: '版本中心',
-  nav_vms_description: '版本、提测与流水线',
-  nav_vms_versions: '版本管理',
-  nav_vms_versions_description: '创建与查看版本',
-  nav_vms_ci: '持续集成 CI',
-  nav_vms_ci_description: '构建与流水线结果',
-  nav_vms_cd: '持续交付 CD',
-  nav_vms_cd_description: '发布与部署记录',
-  nav_autotest: '自动验证',
-  nav_autotest_description: '一键功能回归',
-  nav_autotest_runs: '验证任务',
-  nav_autotest_runs_description: '发起并查看一键验证',
-  nav_users: '用户中心',
-  nav_users_description: '用户、角色与权限',
-  nav_users_list: '用户查询',
-  nav_users_list_description: '查询与管理用户',
-  nav_users_roles: '角色配置',
-  nav_users_roles_description: '角色与成员绑定',
-  nav_users_permissions: '权限配置',
-  nav_users_permissions_description: '菜单与接口权限',
+  robot: '机器人',
+  robot_description: '遥控、地图与 ROS 调试',
 
-  // ---- robot routes ----
+  vms: '版本中心',
+  vms_description: '版本、提测与流水线',
+  vms_versions: '版本管理',
+  vms_versions_description: '创建与查看版本',
+  vms_ci: '持续集成 CI',
+  vms_ci_description: '构建与流水线结果',
+  vms_cd: '持续交付 CD',
+  vms_cd_description: '发布与部署记录',
+
+  test_center: '测试中心',
+  test_center_description: '一键功能回归',
+  test_center_runs: '验证任务',
+  test_center_runs_description: '发起并查看一键验证',
+
+  user_center: '用户中心',
+  user_center_description: '用户、角色与权限',
+  user_center_users: '用户查询',
+  user_center_users_description: '查询与管理用户',
+  user_center_roles: '角色配置',
+  user_center_roles_description: '角色与成员绑定',
+  user_center_permissions: '权限配置',
+  user_center_permissions_description: '菜单与接口权限',
+
   router_setting: '连接设置',
   router_setting_description: 'ROS / 机器人连接参数',
   router_amr_2d: '2D 控制台',
