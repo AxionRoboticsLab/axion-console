@@ -12,6 +12,7 @@ export default function RosClient () {
   const visualization = useVisualization()
   const url = controlParams.rosUrl
   let ws = null
+  const advertised = new Set()
   const rosClient = {
     robotPose: ref({}),
     loadMapData: ref(function (data) {}),
@@ -23,6 +24,24 @@ export default function RosClient () {
   }
 
   let alive = true
+
+  function isRos2 () {
+    return controlParams.rosVersion === 'v2'
+  }
+
+  /** rosbridge 对 ROS2 需要 std_msgs/msg/String 这种带 /msg/ 的类型名 */
+  function stringType () {
+    return isRos2() ? 'std_msgs/msg/String' : 'std_msgs/String'
+  }
+
+  function resolveType (topic, type) {
+    if (type) return type
+    if (topic === '/map_command' || topic === '/map_state') return stringType()
+    if (topic === controlParams.cmdTopic) {
+      return isRos2() ? 'geometry_msgs/msg/Twist' : 'geometry_msgs/Twist'
+    }
+    return undefined
+  }
 
   /**
    * 创建与ROS的WebSocket连接
@@ -65,6 +84,7 @@ export default function RosClient () {
   const initWs = () => {
     ws.onclose = () => {
       connected.value = false
+      advertised.clear()
     }
 
     ws.onerror = () => {
@@ -75,6 +95,8 @@ export default function RosClient () {
     ws.onopen = () => {
       connected.value = true
       heartCheck.start()
+      // 浏览器侧发布前需 advertise，否则部分 rosbridge 会丢弃无 type 的 publish
+      rosClient.advertise('/map_command', stringType())
       Notify.create({ type: 'positive', message: t('notify_ros_connect') })
     }
 
@@ -87,6 +109,11 @@ export default function RosClient () {
           break
         case 'service_response':
           serviceRsMap.set(resData.id, resData)
+          break
+        case 'status':
+          if (resData.level === 'error') {
+            console.error('[rosbridge]', resData.msg || resData)
+          }
           break
       }
     }
@@ -112,7 +139,7 @@ export default function RosClient () {
   }
 
   function wsSend (object) {
-    if (ws.readyState === 1) {
+    if (ws && ws.readyState === 1) {
       ws.send(JSON.stringify(object))
     } else {
       if (connected.value) {
@@ -121,10 +148,29 @@ export default function RosClient () {
     }
   }
 
-  rosClient.subscribe = (topic) => { wsSend({ op: 'subscribe', topic }) }
+  rosClient.subscribe = (topic, type) => {
+    const payload = { op: 'subscribe', topic }
+    const resolved = resolveType(topic, type)
+    if (resolved) payload.type = resolved
+    wsSend(payload)
+  }
   rosClient.unsubscribe = (topic) => { wsSend({ op: 'unsubscribe', topic }) }
-  rosClient.publish = (topic, msg, type) => { wsSend({ op: 'publish', topic, msg, type }) }
-  rosClient.advertise = (topic, type) => { wsSend({ op: 'advertise', topic, type }) }
+  rosClient.advertise = (topic, type) => {
+    const resolved = resolveType(topic, type)
+    if (!resolved) return
+    if (advertised.has(topic)) return
+    advertised.add(topic)
+    wsSend({ op: 'advertise', topic, type: resolved })
+  }
+  rosClient.publish = (topic, msg, type) => {
+    const resolved = resolveType(topic, type)
+    if (resolved) {
+      rosClient.advertise(topic, resolved)
+      wsSend({ op: 'publish', topic, msg, type: resolved })
+    } else {
+      wsSend({ op: 'publish', topic, msg })
+    }
+  }
   rosClient.wsSend = wsSend
 
   const serviceRsMap = new Map()
@@ -134,7 +180,7 @@ export default function RosClient () {
       op: 'call_service',
       id,
       service,
-      args
+      args: args === '' || args === undefined ? {} : args
     }
     wsSend(rosObj)
 
@@ -161,6 +207,7 @@ export default function RosClient () {
     Notify.create({ type: 'info', message: t('notify_ros_release') })
     alive = false
     connected.value = false
+    advertised.clear()
     ws.close()
   }
   rosClient.init = createWs

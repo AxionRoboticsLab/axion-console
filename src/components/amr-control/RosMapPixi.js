@@ -297,18 +297,34 @@ export default function () {
     mapRender.map = map
 
     if (!previousMap) {
+      // 先把地图挂上 stage，避免等 arrow.png 加载导致「很久才出现」
+      if (mapRender.app?.stage) {
+        mapRender.app.stage.addChild(map)
+        mapRender.updateStage()
+        mapRender.centerOnMap()
+      }
       void mapRender.createRobot()
       return
     }
 
     const stage = mapRender.app?.stage
     if (stage && previousMap.parent === stage) {
-      // Pixi v8: replaceChild avoids removeChildAt(0) on empty stage during async init
-      stage.replaceChild(previousMap, map)
+      const idx = Math.max(0, stage.children.indexOf(previousMap))
+      stage.removeChild(previousMap)
+      if (idx <= stage.children.length) {
+        stage.addChildAt(map, idx)
+      } else {
+        stage.addChild(map)
+      }
     } else if (mapRender.robot) {
       mapRender.updateStage()
     }
-    previousMap.destroy({ children: true, texture: true })
+
+    try {
+      previousMap.destroy({ children: true, texture: true })
+    } catch (e) {
+      // ignore destroy errors from already-cleared textures
+    }
   }
 
   mapRender.processLaserScan = (data) => {

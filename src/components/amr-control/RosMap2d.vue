@@ -22,12 +22,13 @@ watch(connected, value => {
     rosClient.subscribe(controlParam.mapTopic)
     rosClient.subscribe('/robot_pose')
     rosClient.subscribe('/map_state')
+    rosClient.advertise('/map_command')
     if (visualization.pathEnable) rosClient.subscribe(visualization.pathTopic)
     if (visualization.laserScanEnable) rosClient.subscribe(visualization.laserScanTopic)
     if (visualization.trajectoryEnable) rosClient.subscribe(visualization.trajectoryTopic)
     if (visualization.costMapEnable) rosClient.subscribe(visualization.costMapTopic)
   }
-})
+}, { immediate: true })
 
 const mapManager = RosMapPixi()
 provide('mapManager', mapManager)

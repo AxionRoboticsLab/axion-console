@@ -11,6 +11,10 @@ const mapState = inject('mapState')
 
 function mapCommand (command) {
   publish('/map_command', { data: command })
+  // 立刻反馈；若后端拒绝，后续 /map_state 会纠正
+  if (command === 'start' && mapState.value === 'idle') {
+    mapState.value = 'mapping'
+  }
 }
 
 function saveMap () {
