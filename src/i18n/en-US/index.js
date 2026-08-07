@@ -4,6 +4,10 @@ export default {
   ok: 'OK',
   cancel: 'Cancel',
 
+  table_total_pages: '{n} pages',
+  table_current_page: 'Page {n}',
+  table_rows_per_page: 'Per page',
+
   toolbar_fullscreen: 'Fullscreen',
   toolbar_settings: 'Settings',
   toolbar_reload: 'Reload',

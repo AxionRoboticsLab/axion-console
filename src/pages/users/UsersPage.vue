@@ -1,9 +1,9 @@
 <template>
-  <q-page padding class="users-page">
-    <div class="text-h5 q-mb-md">{{ t('user_mgmt_title') }}</div>
+  <q-page class="app-page-fill column no-wrap q-pa-md">
+    <div class="text-h5 q-mb-md app-page-fill__title">{{ t('user_mgmt_title') }}</div>
 
-    <!-- 筛选项 -->
-    <q-card flat bordered class="q-mb-md q-pa-md">
+    <!-- 筛选卡片：无外边框 -->
+    <q-card flat class="app-filter-card q-mb-md q-pa-md">
       <div class="row q-col-gutter-md items-end">
         <div class="col-12 col-sm-6 col-md-3">
           <q-input
@@ -44,9 +44,7 @@
       </div>
     </q-card>
 
-    <q-table
-      flat
-      bordered
+    <AppDataTable
       row-key="id"
       :rows="rows"
       :columns="columns"
@@ -102,86 +100,82 @@
           <q-btn flat dense color="negative" icon="delete" :label="t('user_mgmt_delete')" @click="confirmDelete(props.row)" />
         </q-td>
       </template>
-    </q-table>
+    </AppDataTable>
 
-    <q-dialog v-model="drawerOpen" position="right" full-height seamless>
-      <q-card class="user-drawer-card column full-height">
-        <q-card-section class="text-h6">
-          {{ isCreate ? t('user_mgmt_create') : t('user_mgmt_edit') }}
-        </q-card-section>
-        <q-separator />
+    <AppSideDrawer
+      v-model="drawerOpen"
+      :title="isCreate ? t('user_mgmt_create') : t('user_mgmt_edit')"
+    >
+      <q-input
+        v-if="!isCreate"
+        :model-value="String(form.id ?? '')"
+        outlined
+        dense
+        disable
+        :label="t('user_mgmt_id')"
+      />
+      <q-input
+        v-model="form.username"
+        outlined
+        dense
+        lazy-rules
+        :disable="!isCreate"
+        :label="t('user_mgmt_username')"
+        :rules="[v => !!v || t('login_username_required')]"
+      />
+      <q-input
+        v-model="form.name"
+        outlined
+        dense
+        lazy-rules
+        :label="t('user_mgmt_nickname')"
+        :rules="[v => !!v || t('user_mgmt_nickname_required')]"
+      />
+      <q-input
+        v-model="form.password"
+        outlined
+        dense
+        lazy-rules
+        :type="showPwd ? 'text' : 'password'"
+        :label="isCreate ? t('user_mgmt_password') : t('user_mgmt_password_optional')"
+        :hint="isCreate ? '' : t('user_mgmt_password_hint')"
+        :rules="isCreate ? [v => !!v || t('login_password_required')] : []"
+      >
+        <template #append>
+          <q-icon
+            :name="showPwd ? 'visibility_off' : 'visibility'"
+            class="cursor-pointer"
+            @click="showPwd = !showPwd"
+          />
+        </template>
+      </q-input>
+      <q-input
+        v-model="form.avatar_url"
+        outlined
+        dense
+        clearable
+        :label="t('user_mgmt_avatar')"
+        :hint="t('user_mgmt_avatar_optional')"
+      />
+      <q-select
+        v-model="form.role_ids"
+        outlined
+        dense
+        multiple
+        clearable
+        emit-value
+        map-options
+        :options="roleOptions"
+        :label="t('user_mgmt_roles')"
+        :hint="t('user_mgmt_roles_optional')"
+      />
+      <q-toggle v-model="form.enabled" :label="t('user_mgmt_enabled')" color="primary" />
 
-        <q-card-section class="col q-gutter-md" style="overflow: auto; min-width: 380px; max-width: 420px">
-          <q-input
-            v-if="!isCreate"
-            :model-value="String(form.id ?? '')"
-            outlined
-            dense
-            disable
-            :label="t('user_mgmt_id')"
-          />
-          <q-input
-            v-model="form.username"
-            outlined
-            dense
-            :disable="!isCreate"
-            :label="t('user_mgmt_username')"
-            :rules="[v => !!v || t('login_username_required')]"
-          />
-          <q-input
-            v-model="form.name"
-            outlined
-            dense
-            :label="t('user_mgmt_nickname')"
-            :rules="[v => !!v || t('user_mgmt_nickname_required')]"
-          />
-          <q-input
-            v-model="form.password"
-            outlined
-            dense
-            :type="showPwd ? 'text' : 'password'"
-            :label="isCreate ? t('user_mgmt_password') : t('user_mgmt_password_optional')"
-            :hint="isCreate ? '' : t('user_mgmt_password_hint')"
-            :rules="isCreate ? [v => !!v || t('login_password_required')] : []"
-          >
-            <template #append>
-              <q-icon
-                :name="showPwd ? 'visibility_off' : 'visibility'"
-                class="cursor-pointer"
-                @click="showPwd = !showPwd"
-              />
-            </template>
-          </q-input>
-          <q-input
-            v-model="form.avatar_url"
-            outlined
-            dense
-            clearable
-            :label="t('user_mgmt_avatar')"
-            :hint="t('user_mgmt_avatar_optional')"
-          />
-          <q-select
-            v-model="form.role_ids"
-            outlined
-            dense
-            multiple
-            clearable
-            emit-value
-            map-options
-            :options="roleOptions"
-            :label="t('user_mgmt_roles')"
-            :hint="t('user_mgmt_roles_optional')"
-          />
-          <q-toggle v-model="form.enabled" :label="t('user_mgmt_enabled')" color="primary" />
-        </q-card-section>
-
-        <q-separator />
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat :label="t('cancel')" v-close-popup />
-          <q-btn color="primary" unelevated :loading="saving" :label="t('ok')" @click="saveUser" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
+      <template #actions>
+        <q-btn flat :label="t('cancel')" @click="drawerOpen = false" />
+        <q-btn color="primary" unelevated :loading="saving" :label="t('ok')" @click="saveUser" />
+      </template>
+    </AppSideDrawer>
   </q-page>
 </template>
 
@@ -190,6 +184,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
+import AppDataTable from 'components/common/AppDataTable.vue'
+import AppSideDrawer from 'components/common/AppSideDrawer.vue'
 
 defineOptions({ name: 'UsersPage' })
 
@@ -207,7 +203,7 @@ const isCreate = ref(false)
 const filters = reactive({
   username: '',
   name: '',
-  roleFilter: null // null | 'unassigned' | number role id
+  roleFilter: null
 })
 
 const pagination = ref({
@@ -420,9 +416,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.user-drawer-card {
-  width: min(420px, 100vw);
-  max-width: 420px;
-  border-radius: 0;
+.app-page-fill__title {
+  flex-shrink: 0;
+}
+
+.app-filter-card {
+  flex-shrink: 0;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 </style>

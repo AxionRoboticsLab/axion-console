@@ -4,6 +4,10 @@ export default {
   ok: '确认',
   cancel: '取消',
 
+  table_total_pages: '共 {n} 页',
+  table_current_page: '当前第 {n} 页',
+  table_rows_per_page: '每页',
+
   toolbar_fullscreen: '全屏',
   toolbar_settings: '设置',
   toolbar_reload: '同步 / 刷新',

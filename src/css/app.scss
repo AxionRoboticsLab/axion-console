@@ -1,1 +1,14 @@
 // app global css in SCSS form
+
+:root {
+  // Matches Quasar default toolbar / header height
+  --app-header-height: 50px;
+}
+
+// Page fills viewport below fixed header (no outer page scroll)
+.app-page-fill {
+  height: calc(100vh - var(--app-header-height));
+  max-height: calc(100vh - var(--app-header-height));
+  overflow: hidden;
+  box-sizing: border-box;
+}

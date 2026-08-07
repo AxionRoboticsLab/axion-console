@@ -1,6 +1,6 @@
 <template>
-  <q-layout view="hHh lpR fFf">
-    <q-header elevated class="bg-primary text-white">
+  <q-layout view="hHh lpR fFf" class="app-layout">
+    <q-header elevated class="bg-primary text-white app-header">
       <q-toolbar class="q-px-md">
         <q-toolbar-title shrink class="row items-center q-gutter-sm q-mr-lg">
           <q-icon name="smart_toy" size="28px" />
