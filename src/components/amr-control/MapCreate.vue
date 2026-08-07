@@ -9,12 +9,16 @@ const { t } = useI18n()
 const publish = inject('publish')
 const mapState = inject('mapState')
 
+let lastSent = { cmd: '', t: 0 }
+
 function mapCommand (command) {
-  publish('/map_command', { data: command })
-  // 立刻反馈；若后端拒绝，后续 /map_state 会纠正
-  if (command === 'start' && mapState.value === 'idle') {
-    mapState.value = 'mapping'
+  const now = Date.now()
+  // 防止连点 / 事件冒泡导致发两次 start
+  if (command === lastSent.cmd && now - lastSent.t < 400) {
+    return
   }
+  lastSent = { cmd: command, t: now }
+  publish('/map_command', { data: command })
 }
 
 function saveMap () {
