@@ -43,15 +43,6 @@
       <template #body-cell-actions="props">
         <q-td :props="props">
           <q-btn
-            v-if="auth.hasButton('role_edit')"
-            flat
-            dense
-            color="primary"
-            icon="edit"
-            :label="t('role_mgmt_edit')"
-            @click="openEdit(props.row)"
-          />
-          <q-btn
             v-if="auth.hasButton('role_permission')"
             flat
             dense
@@ -59,6 +50,15 @@
             icon="admin_panel_settings"
             :label="t('role_mgmt_permission')"
             @click="openPermission(props.row)"
+          />
+          <q-btn
+            v-if="auth.hasButton('role_edit')"
+            flat
+            dense
+            color="primary"
+            icon="edit"
+            :label="t('role_mgmt_edit')"
+            @click="openEdit(props.row)"
           />
           <q-btn
             v-if="auth.hasButton('role_delete') && props.row.name !== 'admin'"
@@ -116,41 +116,41 @@
     <AppSideDrawer
       v-model="permOpen"
       :title="permTitle"
-      width="640px"
+      width="720px"
     >
       <div v-if="permLoading" class="row flex-center q-pa-lg">
         <q-spinner color="primary" size="40px" />
       </div>
       <div v-else class="perm-tree">
-        <div v-for="menu in rootPermMenus" :key="menu.id" class="q-mb-sm">
+        <div v-for="menu in rootPermMenus" :key="menu.id" class="q-mb-md">
           <q-checkbox
             :model-value="selectedMenuIds.includes(menu.id)"
             :label="menuLabel(menu)"
             @update:model-value="(v) => toggleMenu(menu, v)"
           />
-          <div v-if="(menu.buttons || []).length" class="q-ml-lg">
+          <div v-if="(menu.buttons || []).length" class="q-ml-lg column q-gutter-y-xs">
             <q-checkbox
               v-for="btn in menu.buttons"
               :key="btn.id"
               dense
-              class="q-mr-md"
+              class="full-width"
               :model-value="selectedButtonIds.includes(btn.id)"
               :label="`${btn.name} (${btn.code})`"
               @update:model-value="(v) => toggleButton(btn, menu, v)"
             />
           </div>
-          <div v-for="child in childrenOf(menu.id)" :key="child.id" class="q-ml-lg q-mt-xs">
+          <div v-for="child in childrenOf(menu.id)" :key="child.id" class="q-ml-lg q-mt-sm">
             <q-checkbox
               :model-value="selectedMenuIds.includes(child.id)"
               :label="menuLabel(child)"
               @update:model-value="(v) => toggleMenu(child, v)"
             />
-            <div v-if="(child.buttons || []).length" class="q-ml-lg">
+            <div v-if="(child.buttons || []).length" class="q-ml-lg column q-gutter-y-xs">
               <q-checkbox
                 v-for="btn in child.buttons"
                 :key="btn.id"
                 dense
-                class="q-mr-md"
+                class="full-width"
                 :model-value="selectedButtonIds.includes(btn.id)"
                 :label="`${btn.name} (${btn.code})`"
                 @update:model-value="(v) => toggleButton(btn, child, v)"

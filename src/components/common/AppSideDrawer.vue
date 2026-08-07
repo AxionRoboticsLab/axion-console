@@ -42,7 +42,7 @@ defineOptions({ name: 'AppSideDrawer' })
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   title: { type: String, default: '' },
-  width: { type: String, default: '560px' }
+  width: { type: String, default: '720px' }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -59,8 +59,9 @@ function close () {
 
 <style scoped>
 .app-side-drawer {
-  width: v-bind('props.width');
-  max-width: 100vw;
+  width: v-bind('props.width') !important;
+  min-width: v-bind('props.width');
+  max-width: v-bind('props.width');
   height: calc(100vh - var(--app-header-height));
   max-height: calc(100vh - var(--app-header-height));
   margin-top: var(--app-header-height);
@@ -89,6 +90,10 @@ function close () {
   padding: 0 !important;
   align-items: flex-start;
   justify-content: flex-end;
+}
+
+.app-side-drawer-dialog .q-dialog__inner--minimized > div {
+  max-width: none !important;
 }
 
 .app-side-drawer-dialog .q-dialog__backdrop {

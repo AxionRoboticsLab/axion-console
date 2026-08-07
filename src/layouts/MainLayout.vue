@@ -73,7 +73,6 @@
                   </q-item-section>
                   <q-item-section>
                     <q-item-label>{{ item.nickname || item.name }}</q-item-label>
-                    <q-item-label caption>{{ item.path }}</q-item-label>
                   </q-item-section>
                 </q-item>
               </q-list>

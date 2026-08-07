@@ -43,15 +43,6 @@
       <template #body-cell-actions="props">
         <q-td :props="props">
           <q-btn
-            v-if="auth.hasButton('menu_edit')"
-            flat
-            dense
-            color="primary"
-            icon="edit"
-            :label="t('menu_mgmt_edit')"
-            @click="openEdit(props.row)"
-          />
-          <q-btn
             v-if="auth.hasButton('menu_add_child') && !props.row.parent_id"
             flat
             dense
@@ -59,6 +50,15 @@
             icon="subdirectory_arrow_right"
             :label="t('menu_mgmt_add_child')"
             @click="openCreate(props.row.id)"
+          />
+          <q-btn
+            v-if="auth.hasButton('menu_edit')"
+            flat
+            dense
+            color="primary"
+            icon="edit"
+            :label="t('menu_mgmt_edit')"
+            @click="openEdit(props.row)"
           />
           <q-btn
             v-if="auth.hasButton('menu_delete')"
@@ -76,7 +76,6 @@
     <AppSideDrawer
       v-model="drawerOpen"
       :title="drawerTitle"
-      width="560px"
     >
       <q-input
         v-if="!isCreate"
