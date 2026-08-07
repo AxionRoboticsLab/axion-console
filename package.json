@@ -1,9 +1,9 @@
 {
-  "name": "ros2d-quasar",
+  "name": "axion-console",
   "version": "0.0.1",
-  "description": " A Quasar frontend for ROS/ROS2",
-  "productName": "ROS2D Quasar",
-  "author": "Zhenbiao Huang <biao876990970@hotmail.com>",
+  "description": "A Robot Controller frontend for ROS2",
+  "productName": "Axion Robot Console",
+  "author": "admin@axioncore.dev",
   "type": "module",
   "private": true,
   "scripts": {
