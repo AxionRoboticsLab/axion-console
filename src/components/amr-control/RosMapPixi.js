@@ -167,6 +167,13 @@ export default function () {
    */
   mapRender.init = async (option) => {
     mapRender.canvas = option.canvas
+    // 禁止浏览器默认拖拽/滚动，避免「外层画板」跟着跑
+    Object.assign(mapRender.canvas.style, {
+      touchAction: 'none',
+      userSelect: 'none',
+      display: 'block',
+      overflow: 'hidden'
+    })
 
     const app = new Application()
     await app.init({
@@ -179,54 +186,78 @@ export default function () {
     鼠标滚轮缩放
      */
     app.canvas.addEventListener('wheel', event => {
+      event.preventDefault()
+      event.stopPropagation()
       const scale = mapRender.app.stage.scale
       const delta = event.deltaY > 0 ? 0.9 : 1.1
       scale.set(scale.x * delta, scale.y * delta)
-    })
+    }, { passive: false })
 
-    // 当鼠标按下时开始拖动
+    // 当鼠标按下时开始拖动（只平移 stage，画布元素本身不动）
+    const canvasPos = (event) => {
+      const rect = app.canvas.getBoundingClientRect()
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      }
+    }
+
     app.canvas.addEventListener('pointerdown', event => {
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        app.canvas.setPointerCapture(event.pointerId)
+      } catch (e) { /* ignore */ }
+
+      const pos = canvasPos(event)
       if (mapRender.changeLocation) {
-        mapRender.changePose(mapRender.globalToRos(event.x, event.y))
+        mapRender.changePose(mapRender.globalToRos(pos.x, pos.y))
       } else if (mapRender.changeDirection) {
-        mapRender.changeTheta(mapRender.globalToRos(event.x, event.y))
+        mapRender.changeTheta(mapRender.globalToRos(pos.x, pos.y))
       } else if (mapRender.drawPath) {
         mapRender.drawPathInit()
       } else {
         mapRender.dragging = true
-        mapRender.lastPosition = {
-          x: event.x,
-          y: event.y
-        }
+        mapRender.lastPosition = pos
       }
     })
 
-    // 当鼠标移动时，如果处于拖动状态，则移动画布
+    // 当鼠标移动时，如果处于拖动状态，则平移地图内容（stage），不移动外层 canvas
     app.canvas.addEventListener('pointermove', event => {
+      const pos = canvasPos(event)
       if (mapRender.drawing) {
-        mapRender.drawPathUpdate(mapRender.globalToRos(event.x, event.y))
+        mapRender.drawPathUpdate(mapRender.globalToRos(pos.x, pos.y))
         return
       }
       if (!mapRender.dragging || mapRender.focusing) return
-      const {
-        x,
-        y
-      } = event
-      app.stage.x += x - mapRender.lastPosition.x
-      app.stage.y += y - mapRender.lastPosition.y
-      mapRender.lastPosition = {
-        x,
-        y
-      }
+      event.preventDefault()
+      event.stopPropagation()
+      app.stage.x += pos.x - mapRender.lastPosition.x
+      app.stage.y += pos.y - mapRender.lastPosition.y
+      mapRender.lastPosition = pos
     })
 
-    app.canvas.addEventListener('pointerup', function () {
+    const endDrag = function (event) {
       mapRender.dragging = false
       mapRender.drawing = false
+      try {
+        if (event?.pointerId != null) {
+          app.canvas.releasePointerCapture(event.pointerId)
+        }
+      } catch (e) { /* ignore */ }
+    }
+    app.canvas.addEventListener('pointerup', endDrag)
+    app.canvas.addEventListener('pointercancel', endDrag)
+    app.canvas.addEventListener('pointerleave', () => {
+      // 未 capture 时离开画布结束拖拽；已 capture 则仍由 pointerup 处理
+      if (!app.canvas.hasPointerCapture?.(mapRender._activePointerId)) {
+        mapRender.dragging = false
+      }
     })
 
     app.canvas.addEventListener('touchstart', event => {
       if (event.touches.length === 2) {
+        event.preventDefault()
         mapRender.dragging = false
         mapRender.initialDistance = Math.hypot(
           event.touches[0].clientX - event.touches[1].clientX,
@@ -234,10 +265,11 @@ export default function () {
         )
         mapRender.initialScale = mapRender.app.stage.scale.x
       }
-    })
+    }, { passive: false })
 
     app.canvas.addEventListener('touchmove', event => {
       if (event.touches.length === 2 && mapRender.initialDistance) {
+        event.preventDefault()
         mapRender.dragging = false
         const currentDistance = Math.hypot(
           event.touches[0].clientX - event.touches[1].clientX,
@@ -246,7 +278,7 @@ export default function () {
         const scaleRatio = currentDistance / mapRender.initialDistance
         mapRender.app.stage.scale.set(scaleRatio * mapRender.initialScale, scaleRatio * mapRender.initialScale)
       }
-    })
+    }, { passive: false })
 
     app.canvas.addEventListener('touchend', () => {
       mapRender.initialDistance = null

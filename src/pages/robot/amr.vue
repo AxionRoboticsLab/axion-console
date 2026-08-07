@@ -1,11 +1,33 @@
 <script setup>
 import JoyStick from 'components/ros/JoyStick.vue'
 import RosClient from 'components/ros/RosClient'
-import { computed, onMounted, onUnmounted, provide } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import RosMap2d from 'components/amr-control/RosMap2d.vue'
 
 const rosClient = RosClient()
 provide('rosClient', rosClient)
+
+/** 本地遥操作状态：不依赖 /robot_pose 回传，摇杆立刻驱动箭头 */
+const teleop = ref({
+  x: 0,
+  y: 0,
+  yaw: 0,
+  vx: 0,
+  vy: 0,
+  wz: 0
+})
+provide('teleop', teleop)
+
+function resetTeleopPose () {
+  teleop.value.x = 0
+  teleop.value.y = 0
+  teleop.value.yaw = 0
+  teleop.value.vx = 0
+  teleop.value.vy = 0
+  teleop.value.wz = 0
+}
+provide('resetTeleopPose', resetTeleopPose)
+
 const visible = computed(() => rosClient.mapState && rosClient.mapState.value === 'terminating')
 
 onMounted(() => {

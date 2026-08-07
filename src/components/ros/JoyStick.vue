@@ -55,6 +55,7 @@ function initJoyStick () {
 
 const connected = inject('connected')
 const publish = inject('publish')
+const teleop = inject('teleop', null)
 let moving = true
 const twist = ref({
   linear: { x: 0, y: 0, z: 0 },
@@ -68,6 +69,11 @@ const twist = ref({
  */
 function pubVel (x, y, z) {
   if (!connected.value) return
+  if (teleop) {
+    teleop.value.vx = x
+    teleop.value.vy = y
+    teleop.value.wz = z
+  }
   if (x || y || z) {
     moving = true
     twist.value.linear.x = x

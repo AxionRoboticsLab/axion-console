@@ -1,6 +1,6 @@
 <script setup>
 
-import { inject, provide, onMounted, ref, watch } from 'vue'
+import { inject, provide, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import RosMapPixi from 'components/amr-control/RosMapPixi'
 import RobotRelocate from 'components/amr-control/RobotRelocate.vue'
@@ -33,6 +33,11 @@ watch(connected, value => {
 const mapManager = RosMapPixi()
 provide('mapManager', mapManager)
 const pixiContainer = ref(null)
+const teleop = inject('teleop', null)
+const resetTeleopPose = inject('resetTeleopPose', () => {})
+
+let teleopTimer = null
+let teleopLastMs = 0
 
 onMounted(() => {
   mapManager.init({ canvas: pixiContainer.value })
@@ -41,6 +46,35 @@ onMounted(() => {
   if (visualization.pathEnable) rosClient.loadPath.value = mapManager.processPath
   if (visualization.trajectoryEnable) rosClient.loadTrajectory.value = mapManager.processTrajectory
   if (visualization.costMapTopic) rosClient.loadCostMap.value = mapManager.processCostMap
+
+  // 本地积分：摇杆 → 箭头，不依赖 /robot_pose 经 rosbridge 回传
+  teleopLastMs = performance.now()
+  teleopTimer = setInterval(() => {
+    if (!teleop || pageMode.value === 'navigation') return
+    const now = performance.now()
+    const dt = Math.min(0.1, (now - teleopLastMs) / 1000)
+    teleopLastMs = now
+    const t = teleop.value
+    if (!t.vx && !t.vy && !t.wz) return
+    const c = Math.cos(t.yaw)
+    const s = Math.sin(t.yaw)
+    t.x += (c * t.vx - s * t.vy) * dt
+    t.y += (s * t.vx + c * t.vy) * dt
+    t.yaw += t.wz * dt
+    mapManager.updateRobotPose({
+      position: { x: t.x, y: t.y, z: 0 },
+      orientation: {
+        x: 0,
+        y: 0,
+        z: Math.sin(t.yaw * 0.5),
+        w: Math.cos(t.yaw * 0.5)
+      }
+    })
+  }, 50)
+})
+
+onUnmounted(() => {
+  if (teleopTimer) clearInterval(teleopTimer)
 })
 
 const robotPose = inject('robotPose')
@@ -48,8 +82,17 @@ watch(robotPose, value => {
   if (pageMode.value === 'navigation' || !value) return
   // PoseStamped: .pose；PoseWithCovarianceStamped: .pose.pose
   const pose = value.pose?.position ? value.pose : value.pose?.pose
-  if (pose) mapManager.updateRobotPose(pose)
+  if (!pose) return
+  // 有遥控输入时以本地积分为准，避免回传延迟/丢包把箭头拽回去
+  if (teleop && (teleop.value.vx || teleop.value.vy || teleop.value.wz)) return
+  mapManager.updateRobotPose(pose)
 }, { deep: true })
+
+watch(mapState, value => {
+  if (value === 'mapping' || value === 'idle') {
+    resetTeleopPose()
+  }
+})
 
 const pageMode = ref('default')
 provide('pageMode', pageMode)
@@ -92,7 +135,15 @@ const robotRelocate = ref()
       </div>
     </q-scroll-area>
   </q-page-sticky>
-  <canvas ref="pixiContainer" class="full-width full-height"/>
+  <canvas ref="pixiContainer" class="full-width full-height map-canvas"/>
   <RobotRelocate ref="robotRelocate"/>
   <pose-manager/>
 </template>
+
+<style scoped>
+.map-canvas {
+  touch-action: none;
+  user-select: none;
+  display: block;
+}
+</style>

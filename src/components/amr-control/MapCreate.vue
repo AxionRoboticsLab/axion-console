@@ -19,6 +19,10 @@ function mapCommand (command) {
   }
   lastSent = { cmd: command, t: now }
   publish('/map_command', { data: command })
+  // /map_state 经 rosbridge 可能丢包；本地立即切 UI
+  if (command === 'start') {
+    mapState.value = 'mapping'
+  }
 }
 
 function saveMap () {
