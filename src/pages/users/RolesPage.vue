@@ -116,7 +116,7 @@
     <AppSideDrawer
       v-model="permOpen"
       :title="permTitle"
-      width="520px"
+      width="640px"
     >
       <div v-if="permLoading" class="row flex-center q-pa-lg">
         <q-spinner color="primary" size="40px" />

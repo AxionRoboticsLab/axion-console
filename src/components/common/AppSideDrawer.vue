@@ -42,7 +42,7 @@ defineOptions({ name: 'AppSideDrawer' })
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   title: { type: String, default: '' },
-  width: { type: String, default: '420px' }
+  width: { type: String, default: '560px' }
 })
 
 const emit = defineEmits(['update:modelValue'])

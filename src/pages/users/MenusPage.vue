@@ -76,7 +76,7 @@
     <AppSideDrawer
       v-model="drawerOpen"
       :title="drawerTitle"
-      width="480px"
+      width="560px"
     >
       <q-input
         v-if="!isCreate"
