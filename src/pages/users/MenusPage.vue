@@ -52,13 +52,22 @@
             @click="openEdit(props.row)"
           />
           <q-btn
-            v-if="auth.hasButton('menu_add_child')"
+            v-if="auth.hasButton('menu_add_child') && !props.row.parent_id"
             flat
             dense
             color="secondary"
             icon="subdirectory_arrow_right"
             :label="t('menu_mgmt_add_child')"
             @click="openCreate(props.row.id)"
+          />
+          <q-btn
+            v-if="auth.hasButton('menu_delete')"
+            flat
+            dense
+            color="negative"
+            icon="delete"
+            :label="t('menu_mgmt_delete')"
+            @click="confirmDelete(props.row)"
           />
         </q-td>
       </template>
@@ -122,7 +131,8 @@
         map-options
         :options="parentOptions"
         :label="t('menu_mgmt_parent')"
-        :disable="!!fixedParentId"
+        :disable="!!fixedParentId || editHasChildren"
+        :hint="editHasChildren ? t('menu_mgmt_parent_locked') : ''"
       />
       <q-input
         v-model="form.icon"
@@ -203,6 +213,8 @@ const columns = computed(() => [
 
 const parentOptions = computed(() =>
   allMenus.value
+    // 最多两层：父菜单只能选顶层菜单
+    .filter((m) => !m.parent_id)
     .filter((m) => !form.id || m.id !== form.id)
     .map((m) => ({
       label: m.nickname ? `${m.nickname} (${m.name})` : m.name,
@@ -215,6 +227,11 @@ const drawerTitle = computed(() => {
     return fixedParentId.value ? t('menu_mgmt_add_child') : t('menu_mgmt_create')
   }
   return t('menu_mgmt_edit')
+})
+
+const editHasChildren = computed(() => {
+  if (isCreate.value || !form.id) return false
+  return allMenus.value.some((m) => m.parent_id === form.id)
 })
 
 function nameOk (v) {
@@ -280,6 +297,14 @@ function onRequest (props) {
 }
 
 async function openCreate (parentId) {
+  // 子菜单不能再添加子菜单
+  if (parentId) {
+    const parent = allMenus.value.find((m) => m.id === parentId) || rows.value.find((m) => m.id === parentId)
+    if (parent?.parent_id) {
+      $q.notify({ type: 'warning', message: t('menu_mgmt_depth_exceeded') })
+      return
+    }
+  }
   isCreate.value = true
   fixedParentId.value = parentId
   resetForm()
@@ -303,6 +328,46 @@ async function openEdit (row) {
   drawerOpen.value = true
 }
 
+function childCountOf (menuId) {
+  return allMenus.value.filter((m) => m.parent_id === menuId).length
+}
+
+function confirmDelete (row) {
+  const childCount = childCountOf(row.id)
+  if (childCount > 0) {
+    $q.notify({ type: 'warning', message: t('menu_mgmt_has_children') })
+    return
+  }
+  if ((row.button_count || 0) > 0 || (row.buttons || []).length > 0) {
+    $q.notify({ type: 'warning', message: t('menu_mgmt_has_buttons') })
+    return
+  }
+
+  $q.dialog({
+    title: t('menu_mgmt_delete'),
+    message: t('menu_mgmt_delete_confirm', { name: row.nickname || row.name }),
+    cancel: true,
+    persistent: true
+  }).onOk(async () => {
+    try {
+      const { data: body } = await api.delete(`/menus/${row.id}`)
+      if (body.code !== 0) {
+        $q.notify({ type: 'negative', message: body.msg || t('menu_mgmt_delete_failed') })
+        return
+      }
+      $q.notify({ type: 'positive', message: t('menu_mgmt_delete_ok') })
+      await loadAllMenusForParent()
+      await loadMenus()
+      await auth.fetchMe().catch(() => {})
+    } catch (e) {
+      $q.notify({
+        type: 'negative',
+        message: e?.response?.data?.msg || e?.message || t('menu_mgmt_delete_failed')
+      })
+    }
+  })
+}
+
 async function saveMenu () {
   if (isCreate.value && !nameOk(form.name)) {
     $q.notify({ type: 'warning', message: t('menu_mgmt_name_invalid') })
@@ -311,6 +376,13 @@ async function saveMenu () {
   if (!form.nickname?.trim()) {
     $q.notify({ type: 'warning', message: t('menu_mgmt_nickname_required') })
     return
+  }
+  if (form.parent_id) {
+    const parent = allMenus.value.find((m) => m.id === form.parent_id)
+    if (parent?.parent_id) {
+      $q.notify({ type: 'warning', message: t('menu_mgmt_depth_exceeded') })
+      return
+    }
   }
 
   const buttons = (form.buttons || [])
