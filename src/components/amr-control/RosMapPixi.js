@@ -1,7 +1,6 @@
 import { getCssVar } from 'quasar'
 import { useControlParams } from 'stores/control-params'
 import { Application, Sprite, Container, Texture, Graphics, Assets } from 'pixi.js'
-import * as utils from '@pixi/utils'
 
 const controlParam = useControlParams()
 
@@ -21,6 +20,9 @@ export default function () {
    * 在Canvas中渲染机器人的图标
    */
   mapRender.createRobot = async () => {
+    if (mapRender.robot) {
+      return
+    }
     mapRender.robotTexture = await Assets.load('arrow.png')
 
     const robot = new Sprite(mapRender.robotTexture)
@@ -30,7 +32,42 @@ export default function () {
     robot.tint = getCssVar('primary')
     mapRender.robot = new Container()
     mapRender.robot.addChild(robot)
+    mapRender.placeRobotAtMapCenter()
     mapRender.updateStage()
+    mapRender.centerOnMap()
+  }
+
+  mapRender.mapCenter = () => {
+    const info = mapRender.mapInfo
+    if (!info) {
+      return { x: 0, y: 0 }
+    }
+    return {
+      x: info.origin.position.x + (info.width * info.resolution) / 2,
+      y: info.origin.position.y + (info.height * info.resolution) / 2
+    }
+  }
+
+  /** 无 /robot_pose 时，把箭头放在地图中心，避免停在画布左上角 */
+  mapRender.placeRobotAtMapCenter = () => {
+    if (!mapRender.robot) {
+      return
+    }
+    const c = mapRender.mapCenter()
+    mapRender.robot.x = c.x
+    mapRender.robot.y = -c.y
+  }
+
+  /** 把地图中心对准浏览器可视区域中心 */
+  mapRender.centerOnMap = () => {
+    if (!mapRender.app || !mapRender.canvas || !mapRender.mapInfo) {
+      return
+    }
+    const c = mapRender.mapCenter()
+    const sx = mapRender.app.stage.scale.x
+    const sy = mapRender.app.stage.scale.y
+    mapRender.app.stage.x = mapRender.canvas.offsetWidth / 2 - c.x * sx
+    mapRender.app.stage.y = mapRender.canvas.offsetHeight / 2 + c.y * sy
   }
 
   /**
@@ -255,22 +292,23 @@ export default function () {
     map.x += data.info.origin.position.x
     map.y -= data.info.origin.position.y
 
+    mapRender.mapInfo = data.info
     const previousMap = mapRender.map
     mapRender.map = map
 
-    if (previousMap) {
-      // Mock /map is ~2 Hz; createRobot() is async — stage may still be empty.
-      if (previousMap.parent) {
-        previousMap.parent.removeChild(previousMap)
-      }
-      if (mapRender.app?.stage) {
-        mapRender.app.stage.addChildAt(map, 0)
-      }
-    } else {
+    if (!previousMap) {
       void mapRender.createRobot()
+      return
     }
 
-    utils.clearTextureCache()
+    const stage = mapRender.app?.stage
+    if (stage && previousMap.parent === stage) {
+      // Pixi v8: replaceChild avoids removeChildAt(0) on empty stage during async init
+      stage.replaceChild(previousMap, map)
+    } else if (mapRender.robot) {
+      mapRender.updateStage()
+    }
+    previousMap.destroy({ children: true, texture: true })
   }
 
   mapRender.processLaserScan = (data) => {
@@ -417,12 +455,11 @@ export default function () {
       costMap.x += mapRender.robot.x - costMap.width / 2
       costMap.y += mapRender.robot.y - costMap.height / 2
 
-      if (mapRender.costMap) {
-        mapRender.app.stage.removeChild(mapRender.costMap)
+      if (mapRender.costMap?.parent) {
+        mapRender.costMap.parent.removeChild(mapRender.costMap)
       }
-      mapRender.app.stage.addChildAt(costMap, 1)
+      mapRender.app.stage.addChild(costMap)
       mapRender.costMap = costMap
-      utils.clearTextureCache()
     }
   }
 
@@ -437,19 +474,32 @@ export default function () {
    * 渲染Canvas中需要渲染的元素
    */
   mapRender.updateStage = () => {
-    let W = 10
-    let H = 10
-    if (mapRender.canvas.height > mapRender.canvas.width) {
+    if (!mapRender.app || !mapRender.canvas) {
+      return
+    }
+    const info = mapRender.mapInfo
+    const mapW = info ? info.width * info.resolution : 10
+    const mapH = info ? info.height * info.resolution : 10
+    let W = Math.max(mapW, 1) * 1.15
+    let H = Math.max(mapH, 1) * 1.15
+    if (mapRender.canvas.offsetHeight > mapRender.canvas.offsetWidth) {
       H = W * mapRender.canvas.offsetHeight / mapRender.canvas.offsetWidth
     } else {
       W = H * mapRender.canvas.offsetWidth / mapRender.canvas.offsetHeight
     }
-    mapRender.app.stage.scale.set(mapRender.canvas.offsetWidth / W, mapRender.canvas.offsetHeight / H)
+    mapRender.app.stage.scale.set(
+      mapRender.canvas.offsetWidth / W,
+      mapRender.canvas.offsetHeight / H
+    )
 
     mapRender.app.stage.removeChildren()
-    mapRender.app.stage.addChild(mapRender.map)
+    if (mapRender.map) {
+      mapRender.app.stage.addChild(mapRender.map)
+    }
     mapRender.app.stage.addChild(mapRender.poseContainer || new Container())
-    mapRender.app.stage.addChild(mapRender.robot || new Container())
+    if (mapRender.robot) {
+      mapRender.app.stage.addChild(mapRender.robot)
+    }
   }
 
   /**
