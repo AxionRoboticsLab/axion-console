@@ -48,6 +48,27 @@ export default function () {
     }
   }
 
+  /** 地图世界坐标包围盒（略向内收，避免贴边） */
+  mapRender.mapBounds = () => {
+    const info = mapRender.mapInfo
+    if (!info) return null
+    const pad = Math.max(info.resolution * 3, 0.15)
+    const minX = info.origin.position.x + pad
+    const minY = info.origin.position.y + pad
+    const maxX = info.origin.position.x + info.width * info.resolution - pad
+    const maxY = info.origin.position.y + info.height * info.resolution - pad
+    return { minX, minY, maxX, maxY }
+  }
+
+  mapRender.clampWorld = (x, y) => {
+    const b = mapRender.mapBounds()
+    if (!b) return { x, y }
+    return {
+      x: Math.min(b.maxX, Math.max(b.minX, x)),
+      y: Math.min(b.maxY, Math.max(b.minY, y))
+    }
+  }
+
   /** 无 /robot_pose 时，把箭头放在地图中心，避免停在画布左上角 */
   mapRender.placeRobotAtMapCenter = () => {
     if (!mapRender.robot) {
@@ -56,18 +77,24 @@ export default function () {
     const c = mapRender.mapCenter()
     mapRender.robot.x = c.x
     mapRender.robot.y = -c.y
+    mapRender.pose = {
+      position: { x: c.x, y: c.y, z: 0 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 }
+    }
   }
 
-  /** 把地图中心对准浏览器可视区域中心 */
+  /** 把地图中心对准画布可视区域中心 */
   mapRender.centerOnMap = () => {
     if (!mapRender.app || !mapRender.canvas || !mapRender.mapInfo) {
       return
     }
     const c = mapRender.mapCenter()
+    const w = mapRender.app.screen?.width || mapRender.canvas.clientWidth || mapRender.canvas.offsetWidth
+    const h = mapRender.app.screen?.height || mapRender.canvas.clientHeight || mapRender.canvas.offsetHeight
     const sx = mapRender.app.stage.scale.x
     const sy = mapRender.app.stage.scale.y
-    mapRender.app.stage.x = mapRender.canvas.offsetWidth / 2 - c.x * sx
-    mapRender.app.stage.y = mapRender.canvas.offsetHeight / 2 + c.y * sy
+    mapRender.app.stage.x = w / 2 - c.x * sx
+    mapRender.app.stage.y = h / 2 + c.y * sy
   }
 
   /**
@@ -78,12 +105,16 @@ export default function () {
     if (!mapRender.robot || !pose?.position || !pose?.orientation) {
       return
     }
-    mapRender.robot.x = pose.position.x
-    mapRender.robot.y = -pose.position.y
+    const clamped = mapRender.clampWorld(pose.position.x, pose.position.y)
+    mapRender.robot.x = clamped.x
+    mapRender.robot.y = -clamped.y
     mapRender.robot.rotation = (90 + mapRender.quaternionToTheta(pose.orientation)) * Math.PI / 180
-    mapRender.pose = pose
-    // 画板固定居中，不跟随机器人平移
+    mapRender.pose = {
+      position: { x: clamped.x, y: clamped.y, z: pose.position.z || 0 },
+      orientation: pose.orientation
+    }
     mapRender.removeTarget()
+    return mapRender.pose
   }
 
   mapRender.updateTargetPose = (pose) => {

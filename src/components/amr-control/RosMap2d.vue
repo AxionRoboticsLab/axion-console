@@ -48,7 +48,18 @@ onMounted(() => {
   rosClient.loadMapRaw.value = (data) => {
     // 未建图且未载入时忽略后端残留 /map，避免「一进来就有建图板」
     if (!mapBoardVisible.value && mapState.value === 'idle') return
+    const first = !mapManager.map
     mapManager.processMapRaw(data)
+    if (first) {
+      const c = mapManager.mapCenter?.() || { x: 0, y: 0 }
+      if (teleop) {
+        teleop.value.x = c.x
+        teleop.value.y = c.y
+        teleop.value.yaw = 0
+      }
+      mapManager.placeRobotAtMapCenter?.()
+      mapManager.centerOnMap?.()
+    }
   }
   if (visualization.laserScanEnable) rosClient.loadLaserScan.value = mapManager.processLaserScan
   if (visualization.pathEnable) rosClient.loadPath.value = mapManager.processPath
@@ -69,6 +80,9 @@ onMounted(() => {
     t.x += (c * t.vx - s * t.vy) * dt
     t.y += (s * t.vx + c * t.vy) * dt
     t.yaw += t.wz * dt
+    const clamped = mapManager.clampWorld?.(t.x, t.y) || { x: t.x, y: t.y }
+    t.x = clamped.x
+    t.y = clamped.y
     mapManager.updateRobotPose({
       position: { x: t.x, y: t.y, z: 0 },
       orientation: {
@@ -175,7 +189,7 @@ const robotRelocate = ref()
   right: 0;
   bottom: 0;
   width: 100% !important;
-  height: auto !important;
+  height: calc(100% - 3.5rem) !important;
   touch-action: none;
   user-select: none;
   display: block;
