@@ -30,8 +30,8 @@
       @request="onRequest"
     >
       <template #top-right>
-        <q-btn
-          v-if="auth.hasButton('menu_create')"
+        <AuthButton
+          code="menu_create"
           color="primary"
           unelevated
           icon="add"
@@ -42,8 +42,9 @@
 
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn
-            v-if="auth.hasButton('menu_add_child') && !props.row.parent_id"
+          <AuthButton
+            v-if="!props.row.parent_id"
+            code="menu_add_child"
             flat
             dense
             color="secondary"
@@ -51,8 +52,8 @@
             :label="t('menu_mgmt_add_child')"
             @click="openCreate(props.row.id)"
           />
-          <q-btn
-            v-if="auth.hasButton('menu_edit')"
+          <AuthButton
+            code="menu_edit"
             flat
             dense
             color="primary"
@@ -60,8 +61,8 @@
             :label="t('menu_mgmt_edit')"
             @click="openEdit(props.row)"
           />
-          <q-btn
-            v-if="auth.hasButton('menu_delete')"
+          <AuthButton
+            code="menu_delete"
             flat
             dense
             color="negative"
@@ -170,6 +171,7 @@ import { api } from 'boot/axios'
 import { useAuthStore } from 'stores/auth'
 import AppDataTable from 'components/common/AppDataTable.vue'
 import AppSideDrawer from 'components/common/AppSideDrawer.vue'
+import AuthButton from 'components/common/AuthButton.vue'
 
 defineOptions({ name: 'MenusPage' })
 

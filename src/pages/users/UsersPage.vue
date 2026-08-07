@@ -53,8 +53,8 @@
       @request="onRequest"
     >
       <template #top-right>
-        <q-btn
-          v-if="auth.hasButton('user_create')"
+        <AuthButton
+          code="user_create"
           color="primary"
           unelevated
           icon="add"
@@ -103,8 +103,8 @@
 
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn
-            v-if="auth.hasButton('user_edit')"
+          <AuthButton
+            code="user_edit"
             flat
             dense
             color="primary"
@@ -112,8 +112,8 @@
             :label="t('user_mgmt_edit')"
             @click="openEdit(props.row)"
           />
-          <q-btn
-            v-if="auth.hasButton('user_delete')"
+          <AuthButton
+            code="user_delete"
             flat
             dense
             color="negative"
@@ -207,15 +207,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
-import { useAuthStore } from 'stores/auth'
 import AppDataTable from 'components/common/AppDataTable.vue'
 import AppSideDrawer from 'components/common/AppSideDrawer.vue'
+import AuthButton from 'components/common/AuthButton.vue'
 
 defineOptions({ name: 'UsersPage' })
 
 const { t } = useI18n()
 const $q = useQuasar()
-const auth = useAuthStore()
 
 const loading = ref(false)
 const saving = ref(false)

@@ -56,8 +56,10 @@ export const useAuthStore = defineStore('auth', {
     },
 
     hasButton (code) {
+      // 未配置 code：不设权限门槛（查询/取消等）
       if (!code) return true
-      if (this.isSuperUser) return true
+      // 仅认登录/me 下发的 button_codes（来自菜单管理配置 + 角色授权并集）
+      // 未配置或未授权 → 无权限，不展示
       return (this.buttonCodes || []).includes(code)
     },
 

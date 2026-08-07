@@ -30,8 +30,8 @@
       @request="onRequest"
     >
       <template #top-right>
-        <q-btn
-          v-if="auth.hasButton('role_create')"
+        <AuthButton
+          code="role_create"
           color="primary"
           unelevated
           icon="add"
@@ -42,8 +42,8 @@
 
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn
-            v-if="auth.hasButton('role_permission')"
+          <AuthButton
+            code="role_permission"
             flat
             dense
             color="secondary"
@@ -51,8 +51,8 @@
             :label="t('role_mgmt_permission')"
             @click="openPermission(props.row)"
           />
-          <q-btn
-            v-if="auth.hasButton('role_edit')"
+          <AuthButton
+            code="role_edit"
             flat
             dense
             color="primary"
@@ -60,8 +60,9 @@
             :label="t('role_mgmt_edit')"
             @click="openEdit(props.row)"
           />
-          <q-btn
-            v-if="auth.hasButton('role_delete') && props.row.name !== 'admin'"
+          <AuthButton
+            v-if="props.row.name !== 'admin'"
+            code="role_delete"
             flat
             dense
             color="negative"
@@ -175,6 +176,7 @@ import { api } from 'boot/axios'
 import { useAuthStore } from 'stores/auth'
 import AppDataTable from 'components/common/AppDataTable.vue'
 import AppSideDrawer from 'components/common/AppSideDrawer.vue'
+import AuthButton from 'components/common/AuthButton.vue'
 
 defineOptions({ name: 'RolesPage' })
 
@@ -408,6 +410,7 @@ async function savePermission () {
     }
     $q.notify({ type: 'positive', message: t('role_mgmt_save_ok') })
     permOpen.value = false
+    await auth.fetchMe().catch(() => {})
   } catch (e) {
     $q.notify({ type: 'negative', message: e?.response?.data?.msg || e?.message || t('role_mgmt_save_failed') })
   } finally {
