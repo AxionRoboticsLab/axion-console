@@ -255,13 +255,19 @@ export default function () {
     map.x += data.info.origin.position.x
     map.y -= data.info.origin.position.y
 
-    if (mapRender.map) {
-      mapRender.map = map
-      mapRender.app.stage.removeChildAt(0)
-      mapRender.app.stage.addChildAt(mapRender.map, 0)
+    const previousMap = mapRender.map
+    mapRender.map = map
+
+    if (previousMap) {
+      // Mock /map is ~2 Hz; createRobot() is async — stage may still be empty.
+      if (previousMap.parent) {
+        previousMap.parent.removeChild(previousMap)
+      }
+      if (mapRender.app?.stage) {
+        mapRender.app.stage.addChildAt(map, 0)
+      }
     } else {
-      mapRender.map = map
-      mapRender.createRobot()
+      void mapRender.createRobot()
     }
 
     utils.clearTextureCache()
