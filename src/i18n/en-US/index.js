@@ -8,6 +8,9 @@ export default {
   toolbar_settings: 'Settings',
   toolbar_reload: 'Reload',
   toolbar_logout: 'Log out',
+  toolbar_language: 'Language',
+  lang_zh: '中文',
+  lang_en: 'English',
 
   login_subtitle: 'Sign in to console',
   login_username: 'Username',

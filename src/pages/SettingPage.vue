@@ -21,6 +21,12 @@ watch(locale, value => {
   controlParam.locale = value
 })
 
+watch(() => controlParam.locale, (value) => {
+  if (value && locale.value !== value) {
+    locale.value = value
+  }
+})
+
 </script>
 
 <template>

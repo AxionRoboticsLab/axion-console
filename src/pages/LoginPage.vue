@@ -2,6 +2,29 @@
   <q-layout view="hHh lpR fFf" class="login-layout">
     <q-page-container>
       <q-page class="flex flex-center login-page">
+        <div class="login-lang">
+          <q-btn flat round dense color="primary" icon="translate" :aria-label="t('toolbar_language')">
+            <q-menu anchor="bottom right" self="top right">
+              <q-list dense style="min-width: 140px">
+                <q-item
+                  v-for="item in localeMenu"
+                  :key="item.value"
+                  clickable
+                  v-close-popup
+                  :active="item.active"
+                  active-class="bg-primary text-white"
+                  @click="setLocale(item.value)"
+                >
+                  <q-item-section>{{ item.label }}</q-item-section>
+                  <q-item-section side v-if="item.active">
+                    <q-icon name="check" size="18px" />
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+        </div>
+
         <q-card class="login-card q-pa-lg" flat bordered>
           <div class="column items-center q-mb-lg">
             <q-icon name="smart_toy" size="48px" color="primary" />
@@ -71,6 +94,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'stores/auth'
+import { useLocaleSwitch } from 'src/composables/useLocaleSwitch'
 
 defineOptions({ name: 'LoginPage' })
 
@@ -79,6 +103,7 @@ const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { localeMenu, setLocale } = useLocaleSwitch()
 
 const username = ref('')
 const password = ref('')
@@ -95,7 +120,14 @@ async function onSubmit () {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     router.replace(redirect || '/')
   } catch (e) {
-    errorMsg.value = e?.response?.data?.msg || e?.message || t('login_failed')
+    const body = e?.response?.data
+    const detail = body?.detail
+    errorMsg.value =
+      body?.msg ||
+      detail?.msg ||
+      (typeof detail === 'string' ? detail : null) ||
+      e?.message ||
+      t('login_failed')
   } finally {
     loading.value = false
   }
@@ -104,11 +136,19 @@ async function onSubmit () {
 
 <style scoped>
 .login-page {
+  position: relative;
   min-height: 100vh;
   background:
     radial-gradient(ellipse at 20% 20%, rgba(25, 118, 210, 0.12), transparent 50%),
     radial-gradient(ellipse at 80% 80%, rgba(25, 118, 210, 0.08), transparent 45%),
     #f5f7fb;
+}
+
+.login-lang {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
 }
 
 .login-card {

@@ -83,6 +83,29 @@
         <q-space />
 
         <div class="row items-center no-wrap q-gutter-xs">
+          <!-- 语言切换 -->
+          <q-btn flat round dense icon="translate" :aria-label="t('toolbar_language')">
+            <q-tooltip>{{ t('toolbar_language') }}</q-tooltip>
+            <q-menu anchor="bottom right" self="top right">
+              <q-list dense style="min-width: 140px">
+                <q-item
+                  v-for="item in localeMenu"
+                  :key="item.value"
+                  clickable
+                  v-close-popup
+                  :active="item.active"
+                  active-class="bg-primary text-white"
+                  @click="setLocale(item.value)"
+                >
+                  <q-item-section>{{ item.label }}</q-item-section>
+                  <q-item-section side v-if="item.active">
+                    <q-icon name="check" size="18px" />
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+
           <q-btn
             flat
             round
@@ -158,6 +181,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import Links from 'src/router/Links'
 import { useAuthStore } from 'stores/auth'
+import { useLocaleSwitch } from 'src/composables/useLocaleSwitch'
 
 defineOptions({
   name: 'MainLayout'
@@ -169,6 +193,7 @@ const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { localeMenu, setLocale } = useLocaleSwitch()
 
 const modules = Links('modules').filter((m) => m.id !== 'home')
 

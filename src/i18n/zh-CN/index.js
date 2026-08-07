@@ -8,6 +8,9 @@ export default {
   toolbar_settings: '设置',
   toolbar_reload: '同步 / 刷新',
   toolbar_logout: '退出登录',
+  toolbar_language: '语言',
+  lang_zh: '中文',
+  lang_en: 'English',
 
   login_subtitle: '登录控制台',
   login_username: '用户名',

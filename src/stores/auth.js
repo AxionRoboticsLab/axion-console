@@ -17,8 +17,9 @@ export const useAuthStore = defineStore('auth', {
     async login (username, password) {
       const { data: body } = await api.post('/auth/login', { username, password })
       if (body.code !== 0) {
-        const err = new Error(body.msg || '登录失败')
+        const err = new Error(body.msg || 'login failed')
         err.code = body.code
+        err.response = { data: body }
         throw err
       }
       const payload = body.data || {}
