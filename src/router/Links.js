@@ -117,7 +117,7 @@ const moduleLinks = [
         title: 'user_center_users',
         caption: 'user_center_users_description',
         icon: 'group',
-        link: '/users/list'
+        link: '/users/users'
       },
       {
         title: 'user_center_roles',

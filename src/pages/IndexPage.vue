@@ -28,6 +28,6 @@ const cards = [
   { title: 'robot', caption: 'robot_description', icon: 'smart_toy', to: '/robot/amr' },
   { title: 'vms', caption: 'vms_description', icon: 'inventory_2', to: '/vms/versions' },
   { title: 'test_center', caption: 'test_center_description', icon: 'verified', to: '/autotest/runs' },
-  { title: 'user_center', caption: 'user_center_description', icon: 'manage_accounts', to: '/users/list' }
+  { title: 'user_center', caption: 'user_center_description', icon: 'manage_accounts', to: '/users/users' }
 ]
 </script>

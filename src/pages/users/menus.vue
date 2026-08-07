@@ -113,14 +113,14 @@
         outlined
         dense
         :label="t('menu_mgmt_path')"
-        hint="例如 /users/list"
+        hint="例如 /users/users"
       />
       <q-input
         v-model="form.page_entry"
         outlined
         dense
         :label="t('menu_mgmt_page_entry')"
-        hint="例如 pages/users/UsersPage.vue"
+        hint="例如 pages/users/users.vue"
       />
       <q-select
         v-model="form.parent_id"
