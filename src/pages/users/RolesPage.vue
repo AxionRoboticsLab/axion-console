@@ -73,7 +73,6 @@
       </template>
     </AppDataTable>
 
-    <!-- 添加 / 编辑 -->
     <AppSideDrawer
       v-model="drawerOpen"
       :title="isCreate ? t('role_mgmt_create') : t('role_mgmt_edit')"
@@ -114,17 +113,16 @@
       </template>
     </AppSideDrawer>
 
-    <!-- 权限管理 -->
     <AppSideDrawer
       v-model="permOpen"
-      :title="t('role_mgmt_permission') + (permRole ? ` - ${permRole.name}` : '')"
+      :title="permTitle"
       width="520px"
     >
       <div v-if="permLoading" class="row flex-center q-pa-lg">
         <q-spinner color="primary" size="40px" />
       </div>
       <div v-else class="perm-tree">
-        <div v-for="menu in permMenus" :key="menu.id" class="q-mb-sm">
+        <div v-for="menu in rootPermMenus" :key="menu.id" class="q-mb-sm">
           <q-checkbox
             :model-value="selectedMenuIds.includes(menu.id)"
             :label="menuLabel(menu)"
@@ -141,7 +139,7 @@
               @update:model-value="(v) => toggleButton(btn, menu, v)"
             />
           </div>
-          <div v-for="child in menuChildren(menu)" :key="child.id" class="q-ml-lg q-mt-xs">
+          <div v-for="child in childrenOf(menu.id)" :key="child.id" class="q-ml-lg q-mt-xs">
             <q-checkbox
               :model-value="selectedMenuIds.includes(child.id)"
               :label="menuLabel(child)"
@@ -197,7 +195,7 @@ const permOpen = ref(false)
 const permLoading = ref(false)
 const permSaving = ref(false)
 const permRole = ref(null)
-const permMenus = ref([]) // flat list from API
+const permAllMenus = ref([])
 const selectedMenuIds = ref([])
 const selectedButtonIds = ref([])
 
@@ -212,6 +210,12 @@ const columns = computed(() => [
   { name: 'actions', label: t('role_mgmt_actions'), field: 'actions', align: 'right' }
 ])
 
+const rootPermMenus = computed(() => permAllMenus.value.filter((m) => !m.parent_id))
+const permTitle = computed(() => {
+  const base = t('role_mgmt_permission')
+  return permRole.value ? `${base} - ${permRole.value.name}` : base
+})
+
 function nameOk (v) {
   return NAME_RE.test((v || '').trim())
 }
@@ -220,8 +224,8 @@ function menuLabel (m) {
   return m.nickname ? `${m.nickname} (${m.name})` : m.name
 }
 
-function menuChildren (parent) {
-  return permMenus.value.filter((m) => m.parent_id === parent.id)
+function childrenOf (parentId) {
+  return permAllMenus.value.filter((m) => m.parent_id === parentId)
 }
 
 async function loadRoles (page = pagination.value.page, rowsPerPage = pagination.value.rowsPerPage) {
@@ -279,11 +283,9 @@ function openEdit (row) {
 }
 
 async function saveRole () {
-  if (isCreate.value) {
-    if (!nameOk(form.name)) {
-      $q.notify({ type: 'warning', message: t('role_mgmt_name_invalid') })
-      return
-    }
+  if (isCreate.value && !nameOk(form.name)) {
+    $q.notify({ type: 'warning', message: t('role_mgmt_name_invalid') })
+    return
   }
   saving.value = true
   try {
@@ -341,6 +343,7 @@ async function openPermission (row) {
   permLoading.value = true
   selectedMenuIds.value = []
   selectedButtonIds.value = []
+  permAllMenus.value = []
   try {
     const { data: body } = await api.get(`/roles/${row.id}/permissions`)
     if (body.code !== 0) {
@@ -348,18 +351,9 @@ async function openPermission (row) {
       return
     }
     const data = body.data || {}
-    permMenus.value = (data.menus || []).filter((m) => !m.parent_id)
-    // keep flat for children lookup — API returns flat list
-    const all = data.menus || []
-    permMenus.value = all.filter((m) => !m.parent_id)
-    // stash all on a side list via children from flat
-    window.__permAll = all
+    permAllMenus.value = data.menus || []
     selectedMenuIds.value = [...(data.menu_ids || [])]
     selectedButtonIds.value = [...(data.button_ids || [])]
-    // fix: store all menus
-    permMenus.value = all.filter((m) => !m.parent_id)
-    // attach for menuChildren - use all flat stored
-    permAllMenus.value = all
   } catch (e) {
     $q.notify({ type: 'negative', message: e?.response?.data?.msg || e?.message })
   } finally {
@@ -367,21 +361,10 @@ async function openPermission (row) {
   }
 }
 
-const permAllMenus = ref([])
-
-function menuChildrenFixed (parent) {
-  return permAllMenus.value.filter((m) => m.parent_id === parent.id)
-}
-
-// override template helper - redefine
-function menuChildren (parent) {
-  return permAllMenus.value.filter((m) => m.parent_id === parent.id)
-}
-
 function toggleMenu (menu, checked) {
   const ids = new Set(selectedMenuIds.value)
   const btnIds = new Set(selectedButtonIds.value)
-  const kids = menuChildren(menu)
+  const kids = childrenOf(menu.id)
 
   if (checked) {
     ids.add(menu.id)
@@ -441,8 +424,5 @@ onMounted(() => loadRoles())
   flex-shrink: 0;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-.perm-tree {
-  max-height: 100%;
 }
 </style>
