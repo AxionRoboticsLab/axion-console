@@ -7,6 +7,16 @@ export default {
   toolbar_fullscreen: '全屏',
   toolbar_settings: '设置',
   toolbar_reload: '同步 / 刷新',
+  toolbar_logout: '退出登录',
+
+  login_subtitle: '登录控制台',
+  login_username: '用户名',
+  login_password: '密码',
+  login_username_required: '请输入用户名',
+  login_password_required: '请输入密码',
+  login_submit: '登录',
+  login_success: '登录成功',
+  login_failed: '登录失败',
 
   home: '首页',
   home_description: '总览与快捷入口',

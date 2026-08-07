@@ -82,7 +82,6 @@
 
         <q-space />
 
-        <!-- Original ros2d-quasar toolbar actions (was in drawer header) -->
         <div class="row items-center no-wrap q-gutter-xs">
           <q-btn
             flat
@@ -114,6 +113,34 @@
           >
             <q-tooltip>{{ t('toolbar_reload') }}</q-tooltip>
           </q-btn>
+
+          <!-- 登录用户：头像 + 用户名 + 退出 -->
+          <q-btn flat no-caps dense class="q-ml-sm user-chip">
+            <q-avatar size="28px" color="white" text-color="primary" class="q-mr-sm">
+              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" alt="" />
+              <q-icon v-else name="person" />
+            </q-avatar>
+            <span class="user-chip__name">{{ auth.displayName }}</span>
+            <q-icon name="arrow_drop_down" size="20px" />
+
+            <q-menu anchor="bottom right" self="top right">
+              <q-list dense style="min-width: 160px">
+                <q-item>
+                  <q-item-section>
+                    <q-item-label>{{ auth.displayName }}</q-item-label>
+                    <q-item-label caption>{{ auth.user?.username }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-separator />
+                <q-item clickable v-close-popup @click="onLogout">
+                  <q-item-section avatar>
+                    <q-icon name="logout" />
+                  </q-item-section>
+                  <q-item-section>{{ t('toolbar_logout') }}</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
         </div>
       </q-toolbar>
     </q-header>
@@ -130,6 +157,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import Links from 'src/router/Links'
+import { useAuthStore } from 'stores/auth'
 
 defineOptions({
   name: 'MainLayout'
@@ -140,6 +168,7 @@ const { t } = useI18n()
 const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const modules = Links('modules').filter((m) => m.id !== 'home')
 
@@ -156,7 +185,6 @@ function openMenu (id) {
     clearTimeout(closeTimers[id])
     closeTimers[id] = null
   }
-  // close others
   modules.forEach((m) => {
     menuOpen[m.id] = m.id === id
   })
@@ -182,6 +210,12 @@ function isActive (link) {
 function isModuleActive (mod) {
   return mod.children.some((c) => isActive(c.link))
 }
+
+async function onLogout () {
+  await auth.logout()
+  $q.notify({ type: 'info', message: t('toolbar_logout') })
+  router.replace('/login')
+}
 </script>
 
 <style scoped>
@@ -203,10 +237,21 @@ function isModuleActive (mod) {
   position: relative;
 }
 
+.user-chip__name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .top-nav {
     overflow-x: auto;
     max-width: min(70vw, 520px);
+  }
+
+  .user-chip__name {
+    max-width: 72px;
   }
 }
 </style>

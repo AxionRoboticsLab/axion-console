@@ -1,0 +1,119 @@
+<template>
+  <q-layout view="hHh lpR fFf" class="login-layout">
+    <q-page-container>
+      <q-page class="flex flex-center login-page">
+        <q-card class="login-card q-pa-lg" flat bordered>
+          <div class="column items-center q-mb-lg">
+            <q-icon name="smart_toy" size="48px" color="primary" />
+            <div class="text-h5 text-weight-bold q-mt-sm">AXION</div>
+            <div class="text-caption text-grey-7">{{ t('login_subtitle') }}</div>
+          </div>
+
+          <q-form class="q-gutter-md" @submit.prevent="onSubmit">
+            <q-input
+              v-model="username"
+              outlined
+              dense
+              :label="t('login_username')"
+              autocomplete="username"
+              :disable="loading"
+              :rules="[val => !!val || t('login_username_required')]"
+            >
+              <template #prepend>
+                <q-icon name="person" />
+              </template>
+            </q-input>
+
+            <q-input
+              v-model="password"
+              outlined
+              dense
+              :type="showPwd ? 'text' : 'password'"
+              :label="t('login_password')"
+              autocomplete="current-password"
+              :disable="loading"
+              :rules="[val => !!val || t('login_password_required')]"
+            >
+              <template #prepend>
+                <q-icon name="lock" />
+              </template>
+              <template #append>
+                <q-icon
+                  :name="showPwd ? 'visibility_off' : 'visibility'"
+                  class="cursor-pointer"
+                  @click="showPwd = !showPwd"
+                />
+              </template>
+            </q-input>
+
+            <q-banner v-if="errorMsg" dense class="bg-negative text-white q-mb-sm rounded-borders">
+              {{ errorMsg }}
+            </q-banner>
+
+            <q-btn
+              type="submit"
+              color="primary"
+              class="full-width"
+              unelevated
+              :loading="loading"
+              :label="t('login_submit')"
+            />
+          </q-form>
+        </q-card>
+      </q-page>
+    </q-page-container>
+  </q-layout>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { useQuasar } from 'quasar'
+import { useAuthStore } from 'stores/auth'
+
+defineOptions({ name: 'LoginPage' })
+
+const { t } = useI18n()
+const $q = useQuasar()
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+
+const username = ref('')
+const password = ref('')
+const showPwd = ref(false)
+const loading = ref(false)
+const errorMsg = ref('')
+
+async function onSubmit () {
+  errorMsg.value = ''
+  loading.value = true
+  try {
+    await auth.login(username.value.trim(), password.value)
+    $q.notify({ type: 'positive', message: t('login_success') })
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    router.replace(redirect || '/')
+  } catch (e) {
+    errorMsg.value = e?.response?.data?.msg || e?.message || t('login_failed')
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.login-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(25, 118, 210, 0.12), transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(25, 118, 210, 0.08), transparent 45%),
+    #f5f7fb;
+}
+
+.login-card {
+  width: min(400px, 92vw);
+  border-radius: 12px;
+  background: #fff;
+}
+</style>
