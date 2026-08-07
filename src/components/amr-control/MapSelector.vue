@@ -4,19 +4,22 @@ import { inject, ref } from 'vue'
 const visible = ref(false)
 const rosClient = inject('rosClient')
 const publish = inject('publish')
+const mapBoardVisible = inject('mapBoardVisible', null)
 
 const maps = ref([])
 const mapId = ref('')
 async function show () {
   const response = await rosClient.call('/get_map_files', '')
-  if (response.values.message) {
-    maps.value = response.values.message.split(',').map(item => { return { label: item, value: item } })
+  if (response.values?.message) {
+    maps.value = response.values.message.split(',').filter(Boolean).map(item => { return { label: item, value: item } })
   }
   visible.value = true
 }
 
 function selectMap () {
+  if (!mapId.value) return
   publish('/map_command', { data: 'load ' + mapId.value })
+  if (mapBoardVisible) mapBoardVisible.value = true
   visible.value = false
 }
 

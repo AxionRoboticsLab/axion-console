@@ -24,6 +24,12 @@ function stopProcess () {
   }).onOk(() => {
     rosClient.publish('/map_command', { data: 'stop' })
     mapState.value = 'terminating'
+    // 随后后端会到 idle；本地先清板，避免残留建图画面
+    setTimeout(() => {
+      if (mapState.value === 'terminating') {
+        mapState.value = 'idle'
+      }
+    }, 800)
   })
 }
 </script>

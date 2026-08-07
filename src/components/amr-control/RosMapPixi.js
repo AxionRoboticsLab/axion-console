@@ -81,15 +81,8 @@ export default function () {
     mapRender.robot.x = pose.position.x
     mapRender.robot.y = -pose.position.y
     mapRender.robot.rotation = (90 + mapRender.quaternionToTheta(pose.orientation)) * Math.PI / 180
-    if (!mapRender.pose) {
-      mapRender.pose = pose
-      mapRender.focus()
-    } else {
-      mapRender.pose = pose
-      if (mapRender.focusing) {
-        mapRender.focus()
-      }
-    }
+    mapRender.pose = pose
+    // 画板固定居中，不跟随机器人平移
     mapRender.removeTarget()
   }
 
@@ -191,9 +184,9 @@ export default function () {
       const scale = mapRender.app.stage.scale
       const delta = event.deltaY > 0 ? 0.9 : 1.1
       scale.set(scale.x * delta, scale.y * delta)
+      mapRender.centerOnMap()
     }, { passive: false })
 
-    // 当鼠标按下时开始拖动（只平移 stage，画布元素本身不动）
     const canvasPos = (event) => {
       const rect = app.canvas.getBoundingClientRect()
       return {
@@ -202,13 +195,10 @@ export default function () {
       }
     }
 
+    // 禁止拖动画板；仅保留重定位/画路径点击
     app.canvas.addEventListener('pointerdown', event => {
       event.preventDefault()
       event.stopPropagation()
-      try {
-        app.canvas.setPointerCapture(event.pointerId)
-      } catch (e) { /* ignore */ }
-
       const pos = canvasPos(event)
       if (mapRender.changeLocation) {
         mapRender.changePose(mapRender.globalToRos(pos.x, pos.y))
@@ -216,49 +206,22 @@ export default function () {
         mapRender.changeTheta(mapRender.globalToRos(pos.x, pos.y))
       } else if (mapRender.drawPath) {
         mapRender.drawPathInit()
-      } else {
-        mapRender.dragging = true
-        mapRender.lastPosition = pos
       }
     })
 
-    // 当鼠标移动时，如果处于拖动状态，则平移地图内容（stage），不移动外层 canvas
     app.canvas.addEventListener('pointermove', event => {
+      if (!mapRender.drawing) return
       const pos = canvasPos(event)
-      if (mapRender.drawing) {
-        mapRender.drawPathUpdate(mapRender.globalToRos(pos.x, pos.y))
-        return
-      }
-      if (!mapRender.dragging || mapRender.focusing) return
-      event.preventDefault()
-      event.stopPropagation()
-      app.stage.x += pos.x - mapRender.lastPosition.x
-      app.stage.y += pos.y - mapRender.lastPosition.y
-      mapRender.lastPosition = pos
+      mapRender.drawPathUpdate(mapRender.globalToRos(pos.x, pos.y))
     })
 
-    const endDrag = function (event) {
-      mapRender.dragging = false
+    app.canvas.addEventListener('pointerup', () => {
       mapRender.drawing = false
-      try {
-        if (event?.pointerId != null) {
-          app.canvas.releasePointerCapture(event.pointerId)
-        }
-      } catch (e) { /* ignore */ }
-    }
-    app.canvas.addEventListener('pointerup', endDrag)
-    app.canvas.addEventListener('pointercancel', endDrag)
-    app.canvas.addEventListener('pointerleave', () => {
-      // 未 capture 时离开画布结束拖拽；已 capture 则仍由 pointerup 处理
-      if (!app.canvas.hasPointerCapture?.(mapRender._activePointerId)) {
-        mapRender.dragging = false
-      }
     })
 
     app.canvas.addEventListener('touchstart', event => {
       if (event.touches.length === 2) {
         event.preventDefault()
-        mapRender.dragging = false
         mapRender.initialDistance = Math.hypot(
           event.touches[0].clientX - event.touches[1].clientX,
           event.touches[0].clientY - event.touches[1].clientY
@@ -270,13 +233,13 @@ export default function () {
     app.canvas.addEventListener('touchmove', event => {
       if (event.touches.length === 2 && mapRender.initialDistance) {
         event.preventDefault()
-        mapRender.dragging = false
         const currentDistance = Math.hypot(
           event.touches[0].clientX - event.touches[1].clientX,
           event.touches[0].clientY - event.touches[1].clientY
         )
         const scaleRatio = currentDistance / mapRender.initialDistance
         mapRender.app.stage.scale.set(scaleRatio * mapRender.initialScale, scaleRatio * mapRender.initialScale)
+        mapRender.centerOnMap()
       }
     }, { passive: false })
 
@@ -287,12 +250,9 @@ export default function () {
     mapRender.app = app
   }
 
-  /**
-   * 将地图切换到机器人当前的位置
-   */
+  /** 画板固定居中 */
   mapRender.focus = () => {
-    mapRender.app.stage.x = mapRender.canvas.offsetWidth / 2 - (mapRender.pose.position.x * mapRender.app.stage.scale.x)
-    mapRender.app.stage.y = mapRender.canvas.offsetHeight / 2 + (mapRender.pose.position.y * mapRender.app.stage.scale.y)
+    mapRender.centerOnMap()
   }
 
   /**
@@ -353,6 +313,11 @@ export default function () {
       }
     } else if (mapRender.robot) {
       mapRender.updateStage()
+    }
+
+    mapRender.centerOnMap()
+    if (!mapRender.pose) {
+      mapRender.placeRobotAtMapCenter()
     }
 
     try {
@@ -564,6 +529,29 @@ export default function () {
     return {
       x: rosX,
       y: rosY
+    }
+  }
+
+  /** 清空地图画板（未建图 / 取消后只留背景） */
+  mapRender.clearMap = () => {
+    if (mapRender.map?.parent) {
+      mapRender.map.parent.removeChild(mapRender.map)
+    }
+    if (mapRender.map) {
+      try {
+        mapRender.map.destroy({ children: true, texture: true })
+      } catch (e) { /* ignore */ }
+    }
+    mapRender.map = null
+    mapRender.mapInfo = null
+    if (mapRender.robot?.parent) {
+      mapRender.robot.parent.removeChild(mapRender.robot)
+    }
+    mapRender.robot = null
+    mapRender.pose = null
+    if (mapRender.app?.stage) {
+      mapRender.app.stage.x = 0
+      mapRender.app.stage.y = 0
     }
   }
 

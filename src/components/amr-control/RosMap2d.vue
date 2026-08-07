@@ -17,6 +17,10 @@ const mapState = inject('mapState')
 const visualization = useVisualization()
 const controlParam = useControlParams()
 
+/** 是否允许把 /map 画到画布上（只有开始建图或载入后） */
+const mapBoardVisible = ref(false)
+provide('mapBoardVisible', mapBoardVisible)
+
 watch(connected, value => {
   if (value) {
     rosClient.subscribe(controlParam.mapTopic)
@@ -41,16 +45,20 @@ let teleopLastMs = 0
 
 onMounted(() => {
   mapManager.init({ canvas: pixiContainer.value })
-  rosClient.loadMapRaw.value = mapManager.processMapRaw
+  rosClient.loadMapRaw.value = (data) => {
+    // 未建图且未载入时忽略后端残留 /map，避免「一进来就有建图板」
+    if (!mapBoardVisible.value && mapState.value === 'idle') return
+    mapManager.processMapRaw(data)
+  }
   if (visualization.laserScanEnable) rosClient.loadLaserScan.value = mapManager.processLaserScan
   if (visualization.pathEnable) rosClient.loadPath.value = mapManager.processPath
   if (visualization.trajectoryEnable) rosClient.loadTrajectory.value = mapManager.processTrajectory
   if (visualization.costMapTopic) rosClient.loadCostMap.value = mapManager.processCostMap
 
-  // 本地积分：摇杆 → 箭头，不依赖 /robot_pose 经 rosbridge 回传
   teleopLastMs = performance.now()
   teleopTimer = setInterval(() => {
     if (!teleop || pageMode.value === 'navigation') return
+    if (!mapBoardVisible.value) return
     const now = performance.now()
     const dt = Math.min(0.1, (now - teleopLastMs) / 1000)
     teleopLastMs = now
@@ -79,17 +87,31 @@ onUnmounted(() => {
 
 const robotPose = inject('robotPose')
 watch(robotPose, value => {
-  if (pageMode.value === 'navigation' || !value) return
-  // PoseStamped: .pose；PoseWithCovarianceStamped: .pose.pose
+  if (pageMode.value === 'navigation' || !value || !mapBoardVisible.value) return
   const pose = value.pose?.position ? value.pose : value.pose?.pose
   if (!pose) return
-  // 有遥控输入时以本地积分为准，避免回传延迟/丢包把箭头拽回去
   if (teleop && (teleop.value.vx || teleop.value.vy || teleop.value.wz)) return
   mapManager.updateRobotPose(pose)
 }, { deep: true })
 
 watch(mapState, value => {
-  if (value === 'mapping' || value === 'idle') {
+  if (value === 'mapping') {
+    mapBoardVisible.value = true
+    resetTeleopPose()
+    // 箭头默认落在画板几何中心
+    const c = mapManager.mapCenter?.() || { x: 0, y: 0 }
+    if (teleop) {
+      teleop.value.x = c.x
+      teleop.value.y = c.y
+      teleop.value.yaw = 0
+    }
+    mapManager.placeRobotAtMapCenter?.()
+    mapManager.centerOnMap?.()
+  } else if (value === 'idle') {
+    mapBoardVisible.value = false
+    mapManager.clearMap?.()
+    resetTeleopPose()
+  } else if (value === 'terminating') {
     resetTeleopPose()
   }
 })
@@ -103,51 +125,60 @@ const robotRelocate = ref()
 </script>
 
 <template>
-  <q-page-sticky position="top">
-    <q-scroll-area style="height: 3.5rem; width: 100vw" class="q-pa-sm">
-      <div class="no-wrap flex q-gutter-x-sm justify-center">
-        <template v-if="pageMode !== 'navigation'">
-          <q-btn key="no-focus" no-wrap v-if="focusing"  rounded outline :label="$t('amr2d_no_focus')"
-                 @click="mapManager.focusing = false; focusing = false" color="negative" icon="navigation"/>
-          <q-btn key="focusing" no-wrap v-else rounded :label="$t('amr2d_focus')"
-                 @click="mapManager.focusing = true; focusing = true" color="primary" icon="navigation"/>
-        </template>
+  <div class="amr-toolbar">
+    <div class="no-wrap flex q-gutter-x-sm justify-center items-center q-pa-sm">
+      <template v-if="pageMode !== 'navigation'">
+        <q-btn key="no-focus" no-wrap v-if="focusing" rounded outline :label="$t('amr2d_no_focus')"
+               @click="mapManager.focusing = false; focusing = false" color="negative" icon="navigation"/>
+        <q-btn key="focusing" no-wrap v-else rounded :label="$t('amr2d_focus')"
+               @click="mapManager.focusing = true; focusing = true" color="primary" icon="navigation"/>
+      </template>
 
-        <transition-group
-          appear
-          enter-active-class="animated zoomIn"
-          leave-active-class="animated zoomOut"
-        >
-          <q-btn key="navigation" no-wrap v-if="!controlParam.requireMapState || mapState === 'navigation' && pageMode !== 'mapPose'" rounded
-                 :label="pageMode === 'navigation'?$t('ok'):$t('amr2d_navigation_relocate')" color="primary"
-                 icon="label_important_outline"
-                 @click="pageMode === 'navigation'?(pageMode = 'default'):(pageMode='navigation')"/>
-          <q-btn key="navigation-cancel" no-wrap v-if="pageMode==='navigation'" :label="$t('cancel')" rounded color="secondary"
-                 @click="robotRelocate.cancel()"/>
-          <map-create v-if="pageMode === 'default'" key="map-create"/>
-          <map-selector v-if="pageMode === 'default' && mapState === 'idle'" key="map-selector"/>
-          <terminate-process v-if="pageMode === 'default'" key="terminate-process"/>
-          <q-btn key="map-pose" no-wrap v-if="mapState === 'navigation'  && pageMode !== 'navigation'" rounded
-                 :label="$t('mapPose')" color="accent"
-                 :outline="pageMode === 'mapPose'" icon="grain"
-                 @click="pageMode === 'mapPose'?(pageMode = 'default'):(pageMode='mapPose')"/>
-        </transition-group>
-      </div>
-    </q-scroll-area>
-  </q-page-sticky>
+      <q-btn key="navigation" no-wrap v-if="!controlParam.requireMapState || mapState === 'navigation' && pageMode !== 'mapPose'" rounded
+             :label="pageMode === 'navigation'?$t('ok'):$t('amr2d_navigation_relocate')" color="primary"
+             icon="label_important_outline"
+             @click="pageMode === 'navigation'?(pageMode = 'default'):(pageMode='navigation')"/>
+      <q-btn key="navigation-cancel" no-wrap v-if="pageMode==='navigation'" :label="$t('cancel')" rounded color="secondary"
+             @click="robotRelocate.cancel()"/>
+      <map-create v-if="pageMode === 'default'" key="map-create"/>
+      <map-selector v-if="pageMode === 'default' && mapState === 'idle'" key="map-selector"/>
+      <terminate-process v-if="pageMode === 'default'" key="terminate-process"/>
+      <q-btn key="map-pose" no-wrap v-if="mapState === 'navigation'  && pageMode !== 'navigation'" rounded
+             :label="$t('mapPose')" color="accent"
+             :outline="pageMode === 'mapPose'" icon="grain"
+             @click="pageMode === 'mapPose'?(pageMode = 'default'):(pageMode='mapPose')"/>
+    </div>
+  </div>
   <canvas ref="pixiContainer" class="map-canvas"/>
   <RobotRelocate ref="robotRelocate"/>
   <pose-manager/>
 </template>
 
 <style scoped>
+.amr-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3.5rem;
+  z-index: 40;
+  pointer-events: none;
+}
+.amr-toolbar :deep(.q-btn),
+.amr-toolbar :deep(.q-btn-dropdown) {
+  pointer-events: auto;
+}
 .map-canvas {
   position: absolute;
-  inset: 0;
+  top: 3.5rem;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100% !important;
-  height: 100% !important;
+  height: auto !important;
   touch-action: none;
   user-select: none;
   display: block;
+  z-index: 1;
 }
 </style>

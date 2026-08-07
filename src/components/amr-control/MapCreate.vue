@@ -8,6 +8,7 @@ const { t } = useI18n()
 
 const publish = inject('publish')
 const mapState = inject('mapState')
+const mapBoardVisible = inject('mapBoardVisible', null)
 
 let lastSent = { cmd: '', t: 0 }
 
@@ -22,6 +23,7 @@ function mapCommand (command) {
   // /map_state 经 rosbridge 可能丢包；本地立即切 UI
   if (command === 'start') {
     mapState.value = 'mapping'
+    if (mapBoardVisible) mapBoardVisible.value = true
   }
 }
 
