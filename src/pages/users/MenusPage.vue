@@ -142,6 +142,7 @@
       />
 
       <div class="text-subtitle2 q-mt-sm">{{ t('menu_mgmt_buttons') }}</div>
+      <div class="text-caption text-grey-7">{{ t('menu_mgmt_buttons_hint') }}</div>
       <div v-for="(btn, idx) in form.buttons" :key="idx" class="row q-col-gutter-sm q-mb-sm items-start">
         <div class="col-5">
           <q-input v-model="btn.name" outlined dense :label="t('menu_mgmt_btn_name')" />

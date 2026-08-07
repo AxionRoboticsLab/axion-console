@@ -78,6 +78,9 @@ export default {
   role_mgmt_delete_failed: '删除失败',
   role_mgmt_delete_ok: '删除成功',
   role_mgmt_delete_confirm: '确定删除角色 {name} 吗？',
+  role_mgmt_perm_hint: '勾选来自「菜单管理」配置的菜单与按钮；结构为 菜单 → 子菜单 → 按钮',
+  role_mgmt_no_buttons: '（该菜单未配置按钮，请到菜单管理中添加）',
+  role_mgmt_no_menus: '暂无菜单，请先在菜单管理中配置',
 
   menu_mgmt_title: '菜单管理',
   menu_mgmt_create: '添加菜单',
@@ -100,6 +103,7 @@ export default {
   menu_mgmt_icon: '图标',
   menu_mgmt_button_count: '按钮数量',
   menu_mgmt_buttons: '按钮权限',
+  menu_mgmt_buttons_hint: '在此配置本页面全部按钮；角色权限管理将按「菜单→子菜单→按钮」树展示',
   menu_mgmt_btn_name: '按钮名称',
   menu_mgmt_btn_code: '按钮 name',
   menu_mgmt_add_button: '添加按钮',

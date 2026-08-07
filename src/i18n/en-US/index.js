@@ -78,6 +78,9 @@ export default {
   role_mgmt_delete_failed: 'Delete failed',
   role_mgmt_delete_ok: 'Deleted',
   role_mgmt_delete_confirm: 'Delete role {name}?',
+  role_mgmt_perm_hint: 'Check menus/buttons from Menu Management: Menu → Submenu → Button',
+  role_mgmt_no_buttons: '(No buttons on this menu — add them in Menu Management)',
+  role_mgmt_no_menus: 'No menus yet — configure them in Menu Management first',
 
   menu_mgmt_title: 'Menu Management',
   menu_mgmt_create: 'Add Menu',
@@ -100,6 +103,7 @@ export default {
   menu_mgmt_icon: 'Icon',
   menu_mgmt_button_count: 'Buttons',
   menu_mgmt_buttons: 'Button Permissions',
+  menu_mgmt_buttons_hint: 'Configure all page buttons here; role permissions show as Menu → Submenu → Button',
   menu_mgmt_btn_name: 'Button Label',
   menu_mgmt_btn_code: 'Button name',
   menu_mgmt_add_button: 'Add Button',

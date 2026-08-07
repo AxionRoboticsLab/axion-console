@@ -122,42 +122,55 @@
         <q-spinner color="primary" size="40px" />
       </div>
       <div v-else class="perm-tree">
-        <div v-for="menu in rootPermMenus" :key="menu.id" class="q-mb-md">
+        <div class="text-caption text-grey-7 q-mb-md">{{ t('role_mgmt_perm_hint') }}</div>
+        <div v-for="node in permTree" :key="node.id" class="perm-node q-mb-md">
+          <!-- 一级菜单 -->
           <q-checkbox
-            :model-value="selectedMenuIds.includes(menu.id)"
-            :label="menuLabel(menu)"
-            @update:model-value="(v) => toggleMenu(menu, v)"
+            class="text-weight-medium"
+            :model-value="selectedMenuIds.includes(node.id)"
+            :label="menuLabel(node)"
+            @update:model-value="(v) => toggleMenu(node, v)"
           />
-          <div v-if="(menu.buttons || []).length" class="q-ml-lg column q-gutter-y-xs">
+          <!-- 一级菜单自身的按钮（少见，多为页面级菜单） -->
+          <div v-if="(node.buttons || []).length" class="perm-buttons q-ml-lg q-mt-xs">
             <q-checkbox
-              v-for="btn in menu.buttons"
+              v-for="btn in node.buttons"
               :key="btn.id"
               dense
               class="full-width"
               :model-value="selectedButtonIds.includes(btn.id)"
-              :label="`${btn.name} (${btn.code})`"
-              @update:model-value="(v) => toggleButton(btn, menu, v)"
+              :label="buttonLabel(btn)"
+              @update:model-value="(v) => toggleButton(btn, node, v)"
             />
           </div>
-          <div v-for="child in childrenOf(menu.id)" :key="child.id" class="q-ml-lg q-mt-sm">
+          <!-- 子菜单 → 按钮 -->
+          <div
+            v-for="child in (node.children || [])"
+            :key="child.id"
+            class="perm-child q-ml-lg q-mt-sm"
+          >
             <q-checkbox
               :model-value="selectedMenuIds.includes(child.id)"
               :label="menuLabel(child)"
               @update:model-value="(v) => toggleMenu(child, v)"
             />
-            <div v-if="(child.buttons || []).length" class="q-ml-lg column q-gutter-y-xs">
+            <div v-if="(child.buttons || []).length" class="perm-buttons q-ml-lg q-mt-xs">
               <q-checkbox
                 v-for="btn in child.buttons"
                 :key="btn.id"
                 dense
                 class="full-width"
                 :model-value="selectedButtonIds.includes(btn.id)"
-                :label="`${btn.name} (${btn.code})`"
+                :label="buttonLabel(btn)"
                 @update:model-value="(v) => toggleButton(btn, child, v)"
               />
             </div>
+            <div v-else class="text-caption text-grey-5 q-ml-lg q-mt-xs">
+              {{ t('role_mgmt_no_buttons') }}
+            </div>
           </div>
         </div>
+        <div v-if="!permTree.length" class="text-grey-6">{{ t('role_mgmt_no_menus') }}</div>
       </div>
 
       <template #actions>
@@ -196,7 +209,8 @@ const permOpen = ref(false)
 const permLoading = ref(false)
 const permSaving = ref(false)
 const permRole = ref(null)
-const permAllMenus = ref([])
+/** 完整菜单树：菜单 → [按钮] / 菜单 → 子菜单 → [按钮] */
+const permTree = ref([])
 const selectedMenuIds = ref([])
 const selectedButtonIds = ref([])
 
@@ -211,7 +225,6 @@ const columns = computed(() => [
   { name: 'actions', label: t('role_mgmt_actions'), field: 'actions', align: 'right' }
 ])
 
-const rootPermMenus = computed(() => permAllMenus.value.filter((m) => !m.parent_id))
 const permTitle = computed(() => {
   const base = t('role_mgmt_permission')
   return permRole.value ? `${base} - ${permRole.value.name}` : base
@@ -225,8 +238,24 @@ function menuLabel (m) {
   return m.nickname ? `${m.nickname} (${m.name})` : m.name
 }
 
-function childrenOf (parentId) {
-  return permAllMenus.value.filter((m) => m.parent_id === parentId)
+function buttonLabel (btn) {
+  return `${btn.name} [${btn.code}]`
+}
+
+function collectSubtreeMenuIds (node) {
+  const ids = [node.id]
+  ;(node.children || []).forEach((c) => {
+    ids.push(...collectSubtreeMenuIds(c))
+  })
+  return ids
+}
+
+function collectSubtreeButtonIds (node) {
+  const ids = (node.buttons || []).map((b) => b.id)
+  ;(node.children || []).forEach((c) => {
+    ids.push(...collectSubtreeButtonIds(c))
+  })
+  return ids
 }
 
 async function loadRoles (page = pagination.value.page, rowsPerPage = pagination.value.rowsPerPage) {
@@ -344,7 +373,7 @@ async function openPermission (row) {
   permLoading.value = true
   selectedMenuIds.value = []
   selectedButtonIds.value = []
-  permAllMenus.value = []
+  permTree.value = []
   try {
     const { data: body } = await api.get(`/roles/${row.id}/permissions`)
     if (body.code !== 0) {
@@ -352,7 +381,14 @@ async function openPermission (row) {
       return
     }
     const data = body.data || {}
-    permAllMenus.value = data.menus || []
+    // 优先用 tree；兼容旧字段 menus（扁平）时前端自行组树
+    if (Array.isArray(data.tree) && data.tree.length) {
+      permTree.value = data.tree
+    } else if (Array.isArray(data.menus)) {
+      permTree.value = flatMenusToTree(data.menus)
+    } else {
+      permTree.value = []
+    }
     selectedMenuIds.value = [...(data.menu_ids || [])]
     selectedButtonIds.value = [...(data.button_ids || [])]
   } catch (e) {
@@ -362,21 +398,33 @@ async function openPermission (row) {
   }
 }
 
-function toggleMenu (menu, checked) {
+function flatMenusToTree (menus) {
+  const byId = {}
+  menus.forEach((m) => {
+    byId[m.id] = { ...m, buttons: m.buttons || [], children: [] }
+  })
+  const roots = []
+  menus.forEach((m) => {
+    const node = byId[m.id]
+    if (m.parent_id && byId[m.parent_id]) {
+      byId[m.parent_id].children.push(node)
+    } else {
+      roots.push(node)
+    }
+  })
+  return roots
+}
+
+function toggleMenu (node, checked) {
   const ids = new Set(selectedMenuIds.value)
   const btnIds = new Set(selectedButtonIds.value)
-  const kids = childrenOf(menu.id)
 
   if (checked) {
-    ids.add(menu.id)
-    if (menu.parent_id) ids.add(menu.parent_id)
+    collectSubtreeMenuIds(node).forEach((id) => ids.add(id))
+    if (node.parent_id) ids.add(node.parent_id)
   } else {
-    ids.delete(menu.id)
-    kids.forEach((c) => {
-      ids.delete(c.id)
-      ;(c.buttons || []).forEach((b) => btnIds.delete(b.id))
-    })
-    ;(menu.buttons || []).forEach((b) => btnIds.delete(b.id))
+    collectSubtreeMenuIds(node).forEach((id) => ids.delete(id))
+    collectSubtreeButtonIds(node).forEach((id) => btnIds.delete(id))
   }
   selectedMenuIds.value = [...ids]
   selectedButtonIds.value = [...btnIds]
@@ -426,5 +474,16 @@ onMounted(() => loadRoles())
   flex-shrink: 0;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.perm-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.perm-child {
+  border-left: 2px solid rgba(0, 0, 0, 0.08);
+  padding-left: 8px;
 }
 </style>
