@@ -42,7 +42,7 @@ defineOptions({ name: 'AppSideDrawer' })
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   title: { type: String, default: '' },
-  width: { type: String, default: '720px' }
+  width: { type: String, default: '20vw' }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -67,6 +67,7 @@ function close () {
   margin-top: var(--app-header-height);
   border-radius: 0;
   box-shadow: -2px 0 12px rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
 }
 
 .app-side-drawer__header {
