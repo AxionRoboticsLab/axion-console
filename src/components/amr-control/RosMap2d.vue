@@ -45,8 +45,11 @@ onMounted(() => {
 
 const robotPose = inject('robotPose')
 watch(robotPose, value => {
-  if (pageMode.value !== 'navigation') mapManager.updateRobotPose(value.pose)
-})
+  if (pageMode.value === 'navigation' || !value) return
+  // PoseStamped: .pose；PoseWithCovarianceStamped: .pose.pose
+  const pose = value.pose?.position ? value.pose : value.pose?.pose
+  if (pose) mapManager.updateRobotPose(pose)
+}, { deep: true })
 
 const pageMode = ref('default')
 provide('pageMode', pageMode)

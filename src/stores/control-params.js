@@ -3,10 +3,10 @@ import { defineStore } from 'pinia'
 export const useControlParams = defineStore('counter', {
   state: () => ({
     locale: 'en-US',
-    linearRatio: 0.5,
-    linearMax: 1,
+    linearRatio: 0.8,
+    linearMax: 2,
     refreshInterval: 50,
-    angularRatio: 0.5,
+    angularRatio: 1.2,
     keyboardMove: false,
     moveMode: '2wheeled',
     ip: 'localhost',

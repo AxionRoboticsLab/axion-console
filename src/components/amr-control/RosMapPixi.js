@@ -75,21 +75,22 @@ export default function () {
    * @param pose 机器人的Pose
    */
   mapRender.updateRobotPose = (pose) => {
-    if (mapRender.robot) {
-      mapRender.robot.x = pose.position.x
-      mapRender.robot.y = -pose.position.y
-      mapRender.robot.rotation = (90 + mapRender.quaternionToTheta(pose.orientation)) * Math.PI / 180
-      if (!mapRender.pose) {
-        mapRender.pose = pose
-        mapRender.focus()
-      } else {
-        mapRender.pose = pose
-        if (mapRender.focusing) {
-          mapRender.focus()
-        }
-      }
-      mapRender.removeTarget()
+    if (!mapRender.robot || !pose?.position || !pose?.orientation) {
+      return
     }
+    mapRender.robot.x = pose.position.x
+    mapRender.robot.y = -pose.position.y
+    mapRender.robot.rotation = (90 + mapRender.quaternionToTheta(pose.orientation)) * Math.PI / 180
+    if (!mapRender.pose) {
+      mapRender.pose = pose
+      mapRender.focus()
+    } else {
+      mapRender.pose = pose
+      if (mapRender.focusing) {
+        mapRender.focus()
+      }
+    }
+    mapRender.removeTarget()
   }
 
   mapRender.updateTargetPose = (pose) => {
@@ -112,7 +113,9 @@ export default function () {
   }
 
   mapRender.removeTarget = () => {
-    mapRender.app.stage.removeChild(mapRender.target)
+    if (mapRender.target?.parent) {
+      mapRender.target.parent.removeChild(mapRender.target)
+    }
     mapRender.target = null
   }
 

@@ -168,10 +168,10 @@ onUnmounted(() => {
     <q-btn-dropdown v-show="visible" color="primary" :label="$t('joystick_params')" :menu-offset="props.togglePosition === 'bottom-right'?[0,10]:[65,10]">
       <q-card-section>
         <slider-item :label="$t('joystick_linear')" input-label="linear" color="secondary" v-model="controlParams.linearRatio" :min="0.05"
-                     :max="parseInt(controlParams.linearMax)"
+                     :max="Math.max(2, parseFloat(controlParams.linearMax) || 2)"
                      :step="0.05"/>
         <slider-item :label="$t('joystick_angular')" input-label="angular" color="secondary" v-model="controlParams.angularRatio"
-                     :min="0.1" :max="2"
+                     :min="0.1" :max="3"
                      :step="0.1"/>
         <slider-item :label="$t('joystick_interval')" input-label="interval" v-model="controlParams.refreshInterval" :min="25"
                      :max="100" :step="25"/>
