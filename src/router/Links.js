@@ -128,8 +128,8 @@ const moduleLinks = [
       {
         title: 'user_center_permissions',
         caption: 'user_center_permissions_description',
-        icon: 'admin_panel_settings',
-        link: '/users/permissions'
+        icon: 'menu',
+        link: '/users/menus'
       }
     ]
   }

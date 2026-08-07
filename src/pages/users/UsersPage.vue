@@ -53,7 +53,14 @@
       @request="onRequest"
     >
       <template #top-right>
-        <q-btn color="primary" unelevated icon="add" :label="t('user_mgmt_create')" @click="openCreate" />
+        <q-btn
+          v-if="auth.hasButton('user_create')"
+          color="primary"
+          unelevated
+          icon="add"
+          :label="t('user_mgmt_create')"
+          @click="openCreate"
+        />
       </template>
 
       <template #body-cell-avatar_url="props">
@@ -96,8 +103,24 @@
 
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn flat dense color="primary" icon="edit" :label="t('user_mgmt_edit')" @click="openEdit(props.row)" />
-          <q-btn flat dense color="negative" icon="delete" :label="t('user_mgmt_delete')" @click="confirmDelete(props.row)" />
+          <q-btn
+            v-if="auth.hasButton('user_edit')"
+            flat
+            dense
+            color="primary"
+            icon="edit"
+            :label="t('user_mgmt_edit')"
+            @click="openEdit(props.row)"
+          />
+          <q-btn
+            v-if="auth.hasButton('user_delete')"
+            flat
+            dense
+            color="negative"
+            icon="delete"
+            :label="t('user_mgmt_delete')"
+            @click="confirmDelete(props.row)"
+          />
         </q-td>
       </template>
     </AppDataTable>
@@ -184,6 +207,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
+import { useAuthStore } from 'stores/auth'
 import AppDataTable from 'components/common/AppDataTable.vue'
 import AppSideDrawer from 'components/common/AppSideDrawer.vue'
 
@@ -191,6 +215,7 @@ defineOptions({ name: 'UsersPage' })
 
 const { t } = useI18n()
 const $q = useQuasar()
+const auth = useAuthStore()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -264,7 +289,7 @@ function buildQueryParams (page, rowsPerPage) {
 }
 
 async function loadRoles () {
-  const { data: body } = await api.get('/roles')
+  const { data: body } = await api.get('/roles', { params: { page_no: 1, page_size: 200 } })
   if (body.code !== 0) throw new Error(body.msg || 'load roles failed')
   roleOptions.value = (body.data || []).map((r) => ({ label: r.name, value: r.id }))
 }

@@ -8,40 +8,41 @@
         </q-toolbar-title>
 
         <div class="row items-center no-wrap top-nav">
-          <!-- Home: direct link, no dropdown -->
           <q-btn
+            v-if="showHome"
             flat
             no-caps
             dense
             class="top-nav__item"
-            icon="home"
-            :label="t('home')"
+            :icon="homeMenu?.icon || 'home'"
+            :label="homeMenu?.nickname || t('home')"
             :class="{ 'top-nav__item--active': isActive('/') }"
             @click="go('/')"
           />
 
-          <!-- Modules with hover dropdown -->
           <div
-            v-for="mod in modules"
+            v-for="mod in navModules"
             :key="mod.id"
             class="top-nav__wrap"
-            @mouseenter="openMenu(mod.id)"
-            @mouseleave="closeMenu(mod.id)"
+            @mouseenter="mod.children?.length ? openMenu(mod.id) : null"
+            @mouseleave="mod.children?.length ? closeMenu(mod.id) : null"
           >
             <q-btn
               flat
               no-caps
               dense
               class="top-nav__item"
-              :icon="mod.icon"
-              :label="t(mod.title)"
+              :icon="mod.icon || 'folder'"
+              :label="mod.nickname || mod.name"
               :class="{ 'top-nav__item--active': isModuleActive(mod) }"
               :aria-expanded="openId === mod.id"
+              @click="!mod.children?.length && mod.path ? go(mod.path) : null"
             >
-              <q-icon name="arrow_drop_down" size="20px" class="q-ml-xs" />
+              <q-icon v-if="mod.children?.length" name="arrow_drop_down" size="20px" class="q-ml-xs" />
             </q-btn>
 
             <q-menu
+              v-if="mod.children?.length"
               v-model="menuOpen[mod.id]"
               anchor="bottom left"
               self="top left"
@@ -59,20 +60,20 @@
               >
                 <q-item
                   v-for="item in mod.children"
-                  :key="item.link"
+                  :key="item.id"
                   clickable
                   v-ripple
                   v-close-popup
-                  :active="isActive(item.link)"
+                  :active="isActive(item.path)"
                   active-class="bg-primary text-white"
-                  @click="go(item.link)"
+                  @click="go(item.path)"
                 >
                   <q-item-section avatar>
-                    <q-icon :name="item.icon" />
+                    <q-icon :name="item.icon || 'chevron_right'" />
                   </q-item-section>
                   <q-item-section>
-                    <q-item-label>{{ t(item.title) }}</q-item-label>
-                    <q-item-label caption>{{ t(item.caption) }}</q-item-label>
+                    <q-item-label>{{ item.nickname || item.name }}</q-item-label>
+                    <q-item-label caption>{{ item.path }}</q-item-label>
                   </q-item-section>
                 </q-item>
               </q-list>
@@ -83,7 +84,6 @@
         <q-space />
 
         <div class="row items-center no-wrap q-gutter-xs">
-          <!-- 语言切换 -->
           <q-btn flat round dense icon="translate" :aria-label="t('toolbar_language')">
             <q-tooltip>{{ t('toolbar_language') }}</q-tooltip>
             <q-menu anchor="bottom right" self="top right">
@@ -137,7 +137,6 @@
             <q-tooltip>{{ t('toolbar_reload') }}</q-tooltip>
           </q-btn>
 
-          <!-- 登录用户：头像 + 用户名 + 退出 -->
           <q-btn flat no-caps dense class="q-ml-sm user-chip">
             <q-avatar size="28px" color="white" text-color="primary" class="q-mr-sm">
               <img v-if="auth.avatarUrl" :src="auth.avatarUrl" alt="" />
@@ -175,11 +174,10 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
-import Links from 'src/router/Links'
 import { useAuthStore } from 'stores/auth'
 import { useLocaleSwitch } from 'src/composables/useLocaleSwitch'
 
@@ -195,24 +193,37 @@ const router = useRouter()
 const auth = useAuthStore()
 const { localeMenu, setLocale } = useLocaleSwitch()
 
-const modules = Links('modules').filter((m) => m.id !== 'home')
+const homeMenu = computed(() =>
+  (auth.menus || []).find((m) => m.name === 'home' || m.path === '/')
+)
+const showHome = computed(() => true)
+const navModules = computed(() =>
+  (auth.menus || []).filter((m) => m.name !== 'home' && m.path !== '/')
+)
 
 const menuOpen = reactive({})
 const openId = ref(null)
 const closeTimers = {}
 
-modules.forEach((m) => {
-  menuOpen[m.id] = false
-})
+watch(
+  navModules,
+  (mods) => {
+    mods.forEach((m) => {
+      if (menuOpen[m.id] === undefined) menuOpen[m.id] = false
+    })
+  },
+  { immediate: true }
+)
 
 function openMenu (id) {
   if (closeTimers[id]) {
     clearTimeout(closeTimers[id])
     closeTimers[id] = null
   }
-  modules.forEach((m) => {
-    menuOpen[m.id] = m.id === id
+  Object.keys(menuOpen).forEach((k) => {
+    menuOpen[k] = Number(k) === id || k === id
   })
+  menuOpen[id] = true
   openId.value = id
 }
 
@@ -224,16 +235,19 @@ function closeMenu (id) {
 }
 
 function go (path) {
+  if (!path) return
   router.push(path)
 }
 
 function isActive (link) {
+  if (!link) return false
   if (link === '/') return route.path === '/'
   return route.path === link || route.path.startsWith(link + '/')
 }
 
 function isModuleActive (mod) {
-  return mod.children.some((c) => isActive(c.link))
+  if (mod.path && isActive(mod.path)) return true
+  return (mod.children || []).some((c) => isActive(c.path))
 }
 
 async function onLogout () {
@@ -241,6 +255,16 @@ async function onLogout () {
   $q.notify({ type: 'info', message: t('toolbar_logout') })
   router.replace('/login')
 }
+
+onMounted(async () => {
+  if (auth.isAuthenticated) {
+    try {
+      await auth.fetchMe()
+    } catch (_) {
+      // token 失效由 axios 拦截处理
+    }
+  }
+})
 </script>
 
 <style scoped>

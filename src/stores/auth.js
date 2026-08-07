@@ -4,16 +4,33 @@ import { api } from 'boot/axios'
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: null,
-    user: null
+    user: null,
+    menus: [],
+    buttonCodes: []
   }),
 
   getters: {
     isAuthenticated: (state) => Boolean(state.token),
     displayName: (state) => state.user?.name || state.user?.username || '',
-    avatarUrl: (state) => state.user?.avatar_url || ''
+    avatarUrl: (state) => state.user?.avatar_url || '',
+    isSuperUser: (state) => state.user?.super_user === 1
   },
 
   actions: {
+    _applyPayload (payload) {
+      this.token = payload.access_token || payload['X-Token'] || this.token || null
+      this.user = {
+        id: payload.id,
+        username: payload.username,
+        name: payload.name,
+        avatar_url: payload.avatar_url || '',
+        super_user: payload.super_user,
+        state: payload.state
+      }
+      this.menus = payload.menus || []
+      this.buttonCodes = payload.button_codes || []
+    },
+
     async login (username, password) {
       const { data: body } = await api.post('/auth/login', { username, password })
       if (body.code !== 0) {
@@ -23,16 +40,25 @@ export const useAuthStore = defineStore('auth', {
         throw err
       }
       const payload = body.data || {}
-      this.token = payload.access_token || payload['X-Token'] || null
-      this.user = {
-        id: payload.id,
-        username: payload.username,
-        name: payload.name,
-        avatar_url: payload.avatar_url || '',
-        super_user: payload.super_user,
-        state: payload.state
-      }
+      this._applyPayload(payload)
       return payload
+    },
+
+    async fetchMe () {
+      if (!this.token) return null
+      const { data: body } = await api.get('/auth/me')
+      if (body.code !== 0) {
+        throw new Error(body.msg || 'fetch me failed')
+      }
+      const payload = body.data || {}
+      this._applyPayload({ ...payload, access_token: this.token })
+      return payload
+    },
+
+    hasButton (code) {
+      if (!code) return true
+      if (this.isSuperUser) return true
+      return (this.buttonCodes || []).includes(code)
     },
 
     async logout () {
@@ -43,14 +69,15 @@ export const useAuthStore = defineStore('auth', {
       } catch (_) {
         // ignore
       } finally {
-        this.token = null
-        this.user = null
+        this.clearSession()
       }
     },
 
     clearSession () {
       this.token = null
       this.user = null
+      this.menus = []
+      this.buttonCodes = []
     }
   },
 
@@ -60,7 +87,7 @@ export const useAuthStore = defineStore('auth', {
       {
         key: 'axion-auth',
         storage: localStorage,
-        paths: ['token', 'user']
+        paths: ['token', 'user', 'menus', 'buttonCodes']
       }
     ]
   }

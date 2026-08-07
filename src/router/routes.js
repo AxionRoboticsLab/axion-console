@@ -37,7 +37,8 @@ const routes = [
       { path: 'users', redirect: '/users/list' },
       { path: 'users/list', name: 'users_list', component: () => import('pages/users/UsersPage.vue') },
       { path: 'users/roles', name: 'users_roles', component: () => import('pages/users/RolesPage.vue') },
-      { path: 'users/permissions', name: 'users_permissions', component: () => import('pages/users/PermissionsPage.vue') }
+      { path: 'users/menus', name: 'users_menus', component: () => import('pages/users/MenusPage.vue') },
+      { path: 'users/permissions', redirect: '/users/menus' }
     ]
   },
   {
