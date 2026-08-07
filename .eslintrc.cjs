@@ -71,6 +71,9 @@ module.exports = {
     
     'prefer-promise-reject-errors': 'off',
 
+    // Quasar route pages often use single-word filenames (amr, setting, service, …)
+    'vue/multi-word-component-names': 'off',
+
     // allow debugger during development only
     'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off'
   }
