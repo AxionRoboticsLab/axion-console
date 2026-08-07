@@ -90,7 +90,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'stores/auth'
@@ -100,7 +100,6 @@ defineOptions({ name: 'LoginPage' })
 
 const { t } = useI18n()
 const $q = useQuasar()
-const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { localeMenu, setLocale } = useLocaleSwitch()
@@ -117,8 +116,8 @@ async function onSubmit () {
   try {
     await auth.login(username.value.trim(), password.value)
     $q.notify({ type: 'positive', message: t('login_success') })
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    router.replace(redirect || '/')
+    // 登录成功固定进入首页
+    router.replace('/')
   } catch (e) {
     const body = e?.response?.data
     const detail = body?.detail

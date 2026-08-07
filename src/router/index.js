@@ -18,10 +18,12 @@ export default route(function (/* { store, ssrContext } */) {
     const auth = useAuthStore()
     const isPublic = to.meta.public === true || to.name === 'login'
 
+    // 未登录访问业务页 → 登录页
     if (!isPublic && !auth.isAuthenticated) {
-      next({ path: '/login', query: { redirect: to.fullPath } })
+      next({ path: '/login' })
       return
     }
+    // 已登录访问登录页 → 首页
     if (to.path === '/login' && auth.isAuthenticated) {
       next({ path: '/' })
       return

@@ -26,6 +26,30 @@ function resolveLocale (store) {
   return 'zh-CN'
 }
 
+let redirectingToLogin = false
+
+function clearAuthSession (store) {
+  const auth = store.state.value?.auth
+  if (auth) {
+    auth.token = null
+    auth.user = null
+  }
+}
+
+function goLogin (router, store, message) {
+  clearAuthSession(store)
+  if (router.currentRoute.value.path === '/login' || redirectingToLogin) {
+    return
+  }
+  redirectingToLogin = true
+  if (message) {
+    Notify.create({ type: 'warning', message })
+  }
+  router.replace({ path: '/login' }).finally(() => {
+    redirectingToLogin = false
+  })
+}
+
 export default boot(({ app, router, store }) => {
   api.interceptors.request.use((config) => {
     const auth = store.state.value?.auth
@@ -35,7 +59,6 @@ export default boot(({ app, router, store }) => {
       config.headers['X-Token'] = token
     }
 
-    // 与后端约定：X-Locale 优先，Accept-Language 兼容
     const loc = resolveLocale(store)
     config.headers['X-Locale'] = loc
     config.headers['Accept-Language'] = loc
@@ -47,21 +70,15 @@ export default boot(({ app, router, store }) => {
     async (error) => {
       const status = error?.response?.status
       const url = String(error?.config?.url || '')
-      if (status === 401 && !url.includes('/auth/login') && !url.includes('/auth/register')) {
-        const auth = store.state.value?.auth
-        if (auth) {
-          auth.token = null
-          auth.user = null
-        }
-        if (router.currentRoute.value.path !== '/login') {
-          const body = error?.response?.data
-          Notify.create({
-            type: 'warning',
-            message: body?.msg || body?.detail?.msg || '请重新登录'
-          })
-          router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
-        }
+      const isAuthPublic = url.includes('/auth/login') || url.includes('/auth/register')
+
+      // 后端 401：清会话并跳转登录页（登录/注册接口本身除外）
+      if (status === 401 && !isAuthPublic) {
+        const body = error?.response?.data
+        const msg = body?.msg || body?.detail?.msg
+        goLogin(router, store, msg)
       }
+
       return Promise.reject(error)
     }
   )
