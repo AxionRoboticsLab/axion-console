@@ -1,24 +1,49 @@
 import { boot } from 'quasar/wrappers'
 import axios from 'axios'
+import { Notify } from 'quasar'
 
-// Be careful when using SSR for cross-request state pollution
-// due to creating a Singleton instance here;
-// If any client changes this (global) instance, it might be a
-// good idea to move this instance creation inside of the
-// "export default () => {}" function below (which runs individually
-// for each client)
-const api = axios.create({ baseURL: 'https://api.example.com' })
+/**
+ * Production nginx: /api/rcs/ → edge-agent :5100/api/
+ * Dev: Vite proxy mirrors the same path (quasar.config.js).
+ */
+const api = axios.create({
+  baseURL: '/api/rcs',
+  timeout: 15000
+})
 
-export default boot(({ app }) => {
-  // for use inside Vue files (Options API) through this.$axios and this.$api
+export default boot(({ app, router, store }) => {
+  api.interceptors.request.use((config) => {
+    const auth = store.state.value?.auth
+    const token = auth?.token
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+      config.headers['X-Token'] = token
+    }
+    return config
+  })
+
+  api.interceptors.response.use(
+    (res) => res,
+    async (error) => {
+      const status = error?.response?.status
+      const url = String(error?.config?.url || '')
+      if (status === 401 && !url.includes('/auth/login')) {
+        const auth = store.state.value?.auth
+        if (auth) {
+          auth.token = null
+          auth.user = null
+        }
+        if (router.currentRoute.value.path !== '/login') {
+          Notify.create({ type: 'warning', message: '请重新登录' })
+          router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
+        }
+      }
+      return Promise.reject(error)
+    }
+  )
 
   app.config.globalProperties.$axios = axios
-  // ^ ^ ^ this will allow you to use this.$axios (for Vue Options API form)
-  //       so you won't necessarily have to import axios in each vue file
-
   app.config.globalProperties.$api = api
-  // ^ ^ ^ this will allow you to use this.$api (for Vue Options API form)
-  //       so you can easily perform requests against your app's API
 })
 
 export { api }

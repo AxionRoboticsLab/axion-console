@@ -1,16 +1,21 @@
 /**
- * Copy pieces into axion-console as needed.
- * Suggested route tree for 4 modules + secondary pages.
+ * App routes. Login is outside MainLayout; everything else requires auth.
  */
 
 const routes = [
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('pages/LoginPage.vue'),
+    meta: { public: true }
+  },
   {
     path: '/',
     component: () => import('layouts/MainLayout.vue'),
     children: [
       { path: '', name: 'main', component: () => import('pages/IndexPage.vue') },
 
-      // ---- Robot (existing pages moved under /robot) ----
+      // ---- Robot ----
       { path: 'robot', redirect: '/robot/amr' },
       { path: 'robot/amr', name: 'robot_amr', component: () => import('pages/AmrControl.vue') },
       { path: 'robot/joystick', name: 'robot_joystick', component: () => import('pages/JoystickPage.vue') },

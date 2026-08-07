@@ -7,6 +7,16 @@ export default {
   toolbar_fullscreen: 'Fullscreen',
   toolbar_settings: 'Settings',
   toolbar_reload: 'Reload',
+  toolbar_logout: 'Log out',
+
+  login_subtitle: 'Sign in to console',
+  login_username: 'Username',
+  login_password: 'Password',
+  login_username_required: 'Username is required',
+  login_password_required: 'Password is required',
+  login_submit: 'Sign in',
+  login_success: 'Signed in',
+  login_failed: 'Sign in failed',
 
   home: 'Home',
   home_description: 'Overview and shortcuts',

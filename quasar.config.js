@@ -91,7 +91,14 @@ export default configure((ctx) => {
       // https: true
       host: '0.0.0.0',
       port: 9000,
-      open: true // opens browser window automatically
+      open: true,
+      proxy: {
+        '/api/rcs': {
+          target: 'http://127.0.0.1:5100',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/rcs/, '/api')
+        }
+      }
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#framework
