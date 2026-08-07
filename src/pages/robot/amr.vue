@@ -41,7 +41,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="amr-page">
     <ros-map2d/>
     <joy-stick/>
     <q-inner-loading
@@ -54,3 +54,13 @@ onUnmounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.amr-page {
+  position: relative;
+  height: calc(100vh - var(--app-header-height));
+  max-height: calc(100vh - var(--app-header-height));
+  overflow: hidden;
+  box-sizing: border-box;
+}
+</style>

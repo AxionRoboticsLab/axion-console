@@ -135,13 +135,17 @@ const robotRelocate = ref()
       </div>
     </q-scroll-area>
   </q-page-sticky>
-  <canvas ref="pixiContainer" class="full-width full-height map-canvas"/>
+  <canvas ref="pixiContainer" class="map-canvas"/>
   <RobotRelocate ref="robotRelocate"/>
   <pose-manager/>
 </template>
 
 <style scoped>
 .map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
   touch-action: none;
   user-select: none;
   display: block;

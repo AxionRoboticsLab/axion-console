@@ -27,10 +27,10 @@ const controlParams = useControlParams()
 function initJoyStick () {
   nipplejs.create({
     zone: left.value,
-    mode: 'static', // mode: 'semi','dynamic'
-    position: { left: '100px', bottom: '100px' },
+    mode: 'static',
+    position: { left: '50%', top: '55%' },
     color: getCssVar('negative'),
-    size: 80
+    size: 96
   }).on('start end', function () {
     linearX.value = 0
     linearY.value = 0
@@ -41,11 +41,11 @@ function initJoyStick () {
 
   nipplejs.create({
     zone: right.value,
-    mode: 'static', // mode: 'semi','dynamic'
-    position: { right: '100px', bottom: '100px' },
+    mode: 'static',
+    position: { left: '50%', top: '55%' },
     lockX: true,
     color: getCssVar('negative'),
-    size: 80
+    size: 96
   }).on('end', function () {
     angular.value = 0
   }).on('move', function (evt, data) {
@@ -168,8 +168,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="left" v-show="visible"/>
-  <div ref="right" v-show="visible"/>
+  <div ref="left" class="joystick-zone joystick-zone--left" v-show="visible"/>
+  <div ref="right" class="joystick-zone joystick-zone--right" v-show="visible"/>
   <q-page-sticky v-show="$q.screen.gt.xs" :position="props.togglePosition" :offset="[15, 15]">
     <q-btn-dropdown v-show="visible" color="primary" :label="$t('joystick_params')" :menu-offset="props.togglePosition === 'bottom-right'?[0,10]:[65,10]">
       <q-card-section>
@@ -187,3 +187,20 @@ onUnmounted(() => {
     <q-toggle v-if="props.visibleSwitch" v-model="visible" icon="sports_esports"/>
   </q-page-sticky>
 </template>
+
+<style scoped>
+.joystick-zone {
+  position: absolute;
+  bottom: 0;
+  width: min(42vw, 280px);
+  height: min(42vh, 280px);
+  z-index: 20;
+  pointer-events: auto;
+}
+.joystick-zone--left {
+  left: 0;
+}
+.joystick-zone--right {
+  right: 0;
+}
+</style>
