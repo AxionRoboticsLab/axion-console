@@ -1,210 +1,167 @@
 <script setup>
+/**
+ * 简化交互：
+ * - relocate：点地图设「机器人当前在哪」+ 朝向
+ * - goto：点地图设「要去哪」+ 朝向（Nav2 通车前仅画布目标）
+ */
+import { Notify } from 'quasar'
+import { useI18n } from 'vue-i18n'
 import { computed, inject, ref, watch } from 'vue'
-import { useControlParams } from 'stores/control-params'
 
-const robotPose = inject('robotPose')
-
-const controlParam = useControlParams()
+const { t } = useI18n()
 const pageMode = inject('pageMode')
-const visible = computed(() => (pageMode.value === 'navigation'))
-const clicked = ref(false)
-const navFunction = ref('amr2d_relocate')
-const navIcon = {
-  amr2d_navigation: 'double_arrow',
-  amr2d_relocate: 'play_for_work',
-  amr2d_drawPath: 'route'
-}
-
-const navColor = {
-  amr2d_navigation: 'primary',
-  amr2d_relocate: 'accent',
-  amr2d_drawPath: 'primary'
-}
-
-watch(visible, value => {
-  if (value) { show() } else close()
-})
-
-watch(navFunction, () => updateNavFunction())
-
-function updateNavFunction () {
-  if (navFunction.value === 'amr2d_drawPath') {
-    mapManager.drawPath = true
-    mapManager.changeLocation = false
-    mapManager.changeDirection = false
-  } else {
-    mapManager.drawPathEnd()
-    mapManager.drawPath = false
-    isLocation.value = true
-    mapManager.changeLocation = true
-  }
-}
-
+const robotPose = inject('robotPose')
 const mapManager = inject('mapManager')
-const rosClient = inject('rosClient')
 
-// 重定位置
-mapManager.changePose = (pos) => {
-  tempPose.value.position.x = pos.x
-  tempPose.value.position.y = pos.y
-  switch (navFunction.value) {
-    case 'amr2d_navigation':
-      mapManager.updateTargetPose(tempPose.value)
-      break
-    case 'amr2d_relocate':
-      mapManager.updateRobotPose(tempPose.value)
-      break
-  }
-  clicked.value = true
-}
+/** pageMode: relocate | goto */
+const mode = computed(() => pageMode.value)
+const active = computed(() => mode.value === 'relocate' || mode.value === 'goto')
 
-// 重定方向
-mapManager.changeTheta = (pos) => {
-  const theta = Math.atan2(pos.y - tempPose.value.position.y, pos.x - tempPose.value.position.x)
-  tempPose.value.orientation.z = Math.sin(theta / 2)
-  tempPose.value.orientation.w = Math.cos(theta / 2)
-  switch (navFunction.value) {
-    case 'amr2d_navigation':
-      mapManager.updateTargetPose(tempPose.value)
-      break
-    case 'amr2d_relocate':
-      mapManager.updateRobotPose(tempPose.value)
-      break
-  }
-  clicked.value = true
-}
-
-const isLocation = ref(true)
-watch(isLocation, value => {
-  mapManager.changeLocation = false
-  mapManager.changeDirection = false
-  if (value) {
-    mapManager.changeLocation = true
-  } else {
-    mapManager.changeDirection = true
-  }
-})
-
-const poseWithCovarianceStamped = ref({
-  header: {},
-  pose: {
-    pose: {
-      position: { x: 0, y: 0, z: 0 },
-      orientation: { x: 0, y: 0, z: 0, w: 1 }
-    },
-    covariance: [0.01, 0, 0, 0, 0, 0,
-      0, 0.01, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0.1]
-  }
-})
-
+const step = ref('position') // position | direction | done
+const clicked = ref(false)
 const tempPose = ref({
   position: { x: 0, y: 0, z: 0 },
   orientation: { x: 0, y: 0, z: 0, w: 1 }
 })
 
-const publish = inject('publish')
-function close () {
+const hint = computed(() => {
+  if (mode.value === 'relocate') {
+    return step.value === 'position'
+      ? t('nav_hint_relocate_pos')
+      : t('nav_hint_relocate_dir')
+  }
+  if (mode.value === 'goto') {
+    return step.value === 'position'
+      ? t('nav_hint_goto_pos')
+      : t('nav_hint_goto_dir')
+  }
+  return ''
+})
+
+function resetInteraction () {
+  step.value = 'position'
+  clicked.value = false
   mapManager.changeLocation = false
   mapManager.changeDirection = false
   mapManager.drawPath = false
-  mapManager.removeTarget()
-  mapManager.drawPathEnd()
-  if (clicked.value) {
-    switch (navFunction.value) {
-      case 'amr2d_navigation':
-        // 无 Nav2 / move_base 时只更新画布目标，避免 rosbridge「topic not advertised」
-        mapManager.updateTargetPose(tempPose.value)
-        break
-      case 'amr2d_relocate':
-        poseWithCovarianceStamped.value.pose.pose = tempPose.value
-        if (controlParam.rosVersion === 'v2') {
-          poseWithCovarianceStamped.value.header = { stamp: { sec: 0, nanosec: 0 }, frame_id: 'map' }
-        } else {
-          poseWithCovarianceStamped.value.header = { seq: 0, stamp: 0, frame_id: 'map' }
-        }
-        // 无 amcl 时仅本地改箭头；有定位后再发 /initialpose
-        mapManager.updateRobotPose(tempPose.value)
-        break
-    }
-  } else {
-    if (navFunction.value === 'amr2d_drawPath') {
-      const msg = {
-        header: { stamp: { sec: 0, nanosec: 0 }, frame_id: 'map' },
-        poses: mapManager.drawedPathData.map(item => {
-          return {
-            header: { stamp: { sec: 0, nanosec: 0 }, frame_id: '' },
-            pose: {
-              position: { x: item.x, y: item.y, z: 0 },
-              orientation: { x: 0, y: 0, z: 0, w: 1 }
-            }
-          }
-        })
-      }
-      rosClient.advertise('/amr_rctk/target_path', 'nav_msgs/Path')
-      publish('/amr_rctk/target_path', msg, 'nav_msgs/Path')
+  mapManager.drawPathEnd?.()
+}
+
+function begin () {
+  resetInteraction()
+  const src = robotPose?.value?.pose || mapManager.pose
+  if (src?.position) {
+    tempPose.value = {
+      position: { ...src.position },
+      orientation: { ...(src.orientation || { x: 0, y: 0, z: 0, w: 1 }) }
     }
   }
+  mapManager.changeLocation = true
+  mapManager.changeDirection = false
+}
+
+function end () {
+  resetInteraction()
+  if (mode.value !== 'goto') {
+    mapManager.removeTarget?.()
+  }
+}
+
+watch(active, (on) => {
+  if (on) begin()
+  else end()
+})
+
+watch(mode, (m, prev) => {
+  if ((m === 'relocate' || m === 'goto') && m !== prev) begin()
+})
+
+mapManager.changePose = (pos) => {
+  if (!active.value || step.value !== 'position') return
+  tempPose.value.position.x = pos.x
+  tempPose.value.position.y = pos.y
+  if (mode.value === 'relocate') {
+    mapManager.updateRobotPose(tempPose.value)
+  } else {
+    mapManager.updateTargetPose(tempPose.value)
+  }
+  clicked.value = true
+  step.value = 'direction'
+  mapManager.changeLocation = false
+  mapManager.changeDirection = true
+}
+
+mapManager.changeTheta = (pos) => {
+  if (!active.value || step.value !== 'direction') return
+  const theta = Math.atan2(
+    pos.y - tempPose.value.position.y,
+    pos.x - tempPose.value.position.x
+  )
+  tempPose.value.orientation = {
+    x: 0,
+    y: 0,
+    z: Math.sin(theta / 2),
+    w: Math.cos(theta / 2)
+  }
+  if (mode.value === 'relocate') {
+    mapManager.updateRobotPose(tempPose.value)
+  } else {
+    mapManager.updateTargetPose(tempPose.value)
+  }
+  clicked.value = true
+  step.value = 'done'
+  mapManager.changeLocation = false
+  mapManager.changeDirection = false
+}
+
+function confirm () {
+  if (!clicked.value || step.value === 'position') {
+    Notify.create({ type: 'warning', message: t('nav_need_click_map') })
+    return
+  }
+  if (mode.value === 'relocate') {
+    mapManager.updateRobotPose(tempPose.value)
+    Notify.create({ type: 'positive', message: t('nav_relocate_done') })
+  } else {
+    mapManager.updateTargetPose(tempPose.value)
+    Notify.create({ type: 'positive', message: t('nav_goto_done') })
+  }
+  pageMode.value = 'default'
 }
 
 function cancel () {
   clicked.value = false
   pageMode.value = 'default'
   mapManager.removeTarget?.()
-  mapManager.clearPath?.()
+  resetInteraction()
 }
 
-function show () {
-  if (robotPose.value.pose) {
-    tempPose.value = robotPose.value.pose
-  }
-  mapManager.changeLocation = true
-  clicked.value = false
-  updateNavFunction()
-}
-
-defineExpose({ cancel })
+defineExpose({ cancel, confirm })
 </script>
 
 <template>
-  <q-dialog seamless v-model="visible" position="bottom">
-    <div class="q-pa-sm blur">
+  <q-dialog seamless :model-value="active" position="bottom" persistent>
+    <div class="q-pa-sm nav-tool-bar">
+      <div class="text-center text-body2 text-grey-9 q-mb-xs">{{ hint }}</div>
       <div class="flex justify-center q-gutter-sm">
-        <q-btn-dropdown :icon="navIcon[navFunction]" :color="navColor[navFunction]" :label="$t(navFunction)">
-          <q-list>
-            <q-item clickable v-close-popup @click="navFunction = 'amr2d_navigation'">
-              <q-item-section avatar>
-                <q-icon name="double_arrow"/>
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>{{ $t('amr2d_navigation') }}</q-item-label>
-              </q-item-section>
-            </q-item>
-
-            <q-item clickable v-close-popup @click="navFunction = 'amr2d_relocate'">
-              <q-item-section avatar>
-                <q-icon name="play_for_work"/>
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>{{ $t('amr2d_relocate') }}</q-item-label>
-              </q-item-section>
-            </q-item>
-
-            <q-item v-if="controlParam.rosVersion === 'v2'" clickable v-close-popup @click="navFunction = 'amr2d_drawPath'">
-              <q-item-section avatar>
-                <q-icon name="route"/>
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>{{ $t('amr2d_drawPath') }}</q-item-label>
-              </q-item-section>
-            </q-item>
-          </q-list>
-        </q-btn-dropdown>
-        <q-btn v-if="navFunction !== 'amr2d_drawPath'" class="text-bold" :label="isLocation?$t('amr2d_setPosition'):$t('amr2d_setDirection')" color="secondary" :icon-right="isLocation?'pin_drop':'rotate_90_degrees_ccw'" @click="isLocation = !isLocation"/>
+        <q-btn rounded color="secondary" :label="$t('cancel')" @click="cancel"/>
+        <q-btn
+          rounded
+          color="primary"
+          :label="$t('ok')"
+          :disable="step === 'position'"
+          class="text-bold"
+          @click="confirm"
+        />
       </div>
     </div>
   </q-dialog>
 </template>
+
+<style scoped>
+.nav-tool-bar {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  min-width: min(92vw, 28rem);
+}
+</style>

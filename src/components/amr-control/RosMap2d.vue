@@ -94,7 +94,7 @@ onMounted(() => {
   teleopTimer = setInterval(() => {
     // 建图页：本地积分驱动箭头；导航页交给 /robot_pose（后续接定位）
     if (!isMappingWorkspace.value) return
-    if (!teleop || toolMode.value === 'navigation') return
+    if (!teleop || toolMode.value === 'relocate' || toolMode.value === 'goto') return
     if (!mapBoardVisible.value) return
     const now = performance.now()
     const dt = Math.min(0.1, (now - teleopLastMs) / 1000)
@@ -160,15 +160,19 @@ watch(mapState, value => {
   }
 })
 
-/** 工具子模式：default | navigation（设点/重定位，兼容 RobotRelocate） | mapPose */
+/**
+ * 工具子模式：
+ * default | relocate（重定位）| goto（去这里）| mapPose（收藏的导航点）
+ */
 const toolMode = ref('default')
 provide('pageMode', toolMode)
 
 const focusing = ref(mapManager.focusing)
 const robotRelocate = ref()
+const mapEditMode = computed(() => toolMode.value === 'relocate' || toolMode.value === 'goto')
 
-function toggleNavTool () {
-  toolMode.value = toolMode.value === 'navigation' ? 'default' : 'navigation'
+function setTool (mode) {
+  toolMode.value = toolMode.value === mode ? 'default' : mode
 }
 
 </script>
@@ -176,7 +180,7 @@ function toggleNavTool () {
 <template>
   <div class="amr-toolbar">
     <div class="no-wrap flex q-gutter-x-sm justify-center items-center q-pa-sm">
-      <template v-if="toolMode !== 'navigation'">
+      <template v-if="!mapEditMode">
         <q-btn key="no-focus" no-wrap v-if="focusing" rounded outline :label="$t('amr2d_no_focus')"
                @click="mapManager.focusing = false; focusing = false" color="negative" icon="navigation"/>
         <q-btn key="focusing" no-wrap v-else rounded :label="$t('amr2d_focus')"
@@ -190,20 +194,40 @@ function toggleNavTool () {
         <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
       </template>
 
-      <!-- 导航页：加载地图 / 重定位与单点目标 / 导航点（后续接 Nav2） -->
+      <!-- 导航页：三件事拆开 —— 重定位 / 去这里 / 导航点 -->
       <template v-else>
-        <map-selector v-if="toolMode === 'default'" key="nav-map-selector"/>
-        <q-btn key="nav-goal" no-wrap rounded
-               :label="toolMode === 'navigation' ? $t('ok') : $t('amr2d_navigation_relocate')"
-               color="primary"
-               icon="label_important_outline"
-               @click="toggleNavTool"/>
-        <q-btn key="nav-goal-cancel" no-wrap v-if="toolMode === 'navigation'" :label="$t('cancel')" rounded color="secondary"
-               @click="robotRelocate.cancel()"/>
-        <q-btn key="map-pose" no-wrap v-if="toolMode !== 'navigation'" rounded
-               :label="$t('mapPose')" color="accent"
-               :outline="toolMode === 'mapPose'" icon="grain"
-               @click="toolMode = toolMode === 'mapPose' ? 'default' : 'mapPose'"/>
+        <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
+        <q-btn
+          key="nav-relocate"
+          no-wrap
+          rounded
+          :outline="toolMode !== 'relocate'"
+          :label="$t('nav_relocate')"
+          color="accent"
+          icon="my_location"
+          @click="setTool('relocate')"
+        />
+        <q-btn
+          key="nav-goto"
+          no-wrap
+          rounded
+          :outline="toolMode !== 'goto'"
+          :label="$t('nav_goto')"
+          color="primary"
+          icon="place"
+          @click="setTool('goto')"
+        />
+        <q-btn
+          key="map-pose"
+          no-wrap
+          rounded
+          v-if="!mapEditMode"
+          :outline="toolMode !== 'mapPose'"
+          :label="$t('mapPose')"
+          color="secondary"
+          icon="flag"
+          @click="setTool('mapPose')"
+        />
       </template>
     </div>
   </div>

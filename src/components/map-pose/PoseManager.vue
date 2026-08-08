@@ -141,9 +141,10 @@ function reloadPoses () {
 function choose (pose) {
   selected.value = pose.header.seq
   mapManager?.changePoseColor?.(pose.header.seq)
-  // 尚未接 Nav2：只在地图上高亮/显示目标，不发 move_base（会触发 rosbridge 报错）
+  // 尚未接 Nav2：点击收藏点 = 设为「去这里」的目标
   if (pose?.pose) {
     mapManager?.updateTargetPose?.(pose.pose)
+    Notify.create({ type: 'info', message: t('nav_goto_done') })
   }
 }
 
