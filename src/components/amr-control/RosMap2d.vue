@@ -47,7 +47,11 @@ watch(connected, value => {
     rosClient.subscribe('/map_state')
     rosClient.subscribe('/map_file_list')
     rosClient.advertise('/map_command')
-    if (visualization.pathEnable) rosClient.subscribe(visualization.pathTopic)
+    // 勿订阅尚未存在的 move_base 旧话题，否则 rosbridge 刷 ERROR
+    const pathTopic = visualization.pathTopic || ''
+    if (visualization.pathEnable && pathTopic && !pathTopic.includes('move_base')) {
+      rosClient.subscribe(pathTopic)
+    }
     if (visualization.laserScanEnable) rosClient.subscribe(visualization.laserScanTopic)
     if (visualization.trajectoryEnable) rosClient.subscribe(visualization.trajectoryTopic)
     if (visualization.costMapEnable) rosClient.subscribe(visualization.costMapTopic)

@@ -12,7 +12,6 @@ const { t } = useI18n()
 const pageMode = inject('pageMode')
 const robotPose = inject('robotPose')
 const mapManager = inject('mapManager')
-const publish = inject('publish')
 const loadedMapName = inject('loadedMapName', null)
 
 const visible = computed(() => pageMode.value === 'mapPose')
@@ -142,11 +141,9 @@ function reloadPoses () {
 function choose (pose) {
   selected.value = pose.header.seq
   mapManager?.changePoseColor?.(pose.header.seq)
-  // Nav2 通车前先发 classic goal；有 move_base 时生效
-  try {
-    publish('/move_base_simple/goal', pose)
-  } catch (e) {
-    console.warn('[PoseManager] publish goal failed', e)
+  // 尚未接 Nav2：只在地图上高亮/显示目标，不发 move_base（会触发 rosbridge 报错）
+  if (pose?.pose) {
+    mapManager?.updateTargetPose?.(pose.pose)
   }
 }
 

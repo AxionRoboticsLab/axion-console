@@ -116,17 +116,8 @@ function close () {
   if (clicked.value) {
     switch (navFunction.value) {
       case 'amr2d_navigation':
-        if (controlParam.rosVersion === 'v1') {
-          rosClient.publish('/move_base_simple/goal', {
-            header: { seq: 0, stamp: 0, frame_id: 'map' },
-            pose: tempPose.value
-          })
-        } else {
-          rosClient.publish('/goal_pose', {
-            header: { stamp: { sec: 0, nanosec: 0 }, frame_id: 'map' },
-            pose: tempPose.value
-          })
-        }
+        // 无 Nav2 / move_base 时只更新画布目标，避免 rosbridge「topic not advertised」
+        mapManager.updateTargetPose(tempPose.value)
         break
       case 'amr2d_relocate':
         poseWithCovarianceStamped.value.pose.pose = tempPose.value
@@ -135,7 +126,8 @@ function close () {
         } else {
           poseWithCovarianceStamped.value.header = { seq: 0, stamp: 0, frame_id: 'map' }
         }
-        publish('/initialpose', poseWithCovarianceStamped.value)
+        // 无 amcl 时仅本地改箭头；有定位后再发 /initialpose
+        mapManager.updateRobotPose(tempPose.value)
         break
     }
   } else {
@@ -161,8 +153,8 @@ function close () {
 function cancel () {
   clicked.value = false
   pageMode.value = 'default'
-  publish('/move_base/cancel', {})
-  mapManager.clearPath()
+  mapManager.removeTarget?.()
+  mapManager.clearPath?.()
 }
 
 function show () {

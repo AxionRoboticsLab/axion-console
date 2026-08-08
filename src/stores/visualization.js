@@ -2,8 +2,9 @@ import { defineStore } from 'pinia'
 
 export const useVisualization = defineStore('visualization', {
   state: () => ({
-    pathEnable: true,
-    pathTopic: '/move_base/NavfnROS/plan',
+    // Nav2 通车前默认关闭：旧默认 /move_base/NavfnROS/plan 不存在，会刷 rosbridge 报错
+    pathEnable: false,
+    pathTopic: '/plan',
     trajectoryEnable: false,
     trajectoryTopic: '/robot_path',
     laserScanEnable: false,
