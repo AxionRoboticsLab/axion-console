@@ -146,12 +146,16 @@ export default function () {
   }
 
   mapRender.loadPoseList = async function (poseList) {
+    if (!mapRender.poseContainer) {
+      mapRender.poseContainer = new Container()
+    }
     mapRender.poseContainer.removeChildren()
 
     mapRender.poseTexture = await Assets.load('pose.png')
 
-    poseList.forEach(p => {
+    ;(poseList || []).forEach(p => {
       const pos = p.pose || p
+      if (!pos?.position || !pos?.orientation) return
       const point = new Sprite(mapRender.poseTexture)
       point.anchor.set(0.5)
       point.alpha = 0.66
@@ -162,10 +166,15 @@ export default function () {
       point.x = pos.position.x
       point.y = -pos.position.y
       point.rotation = (90 + mapRender.quaternionToTheta(pos.orientation)) * Math.PI / 180
-      point.label = p.header.seq
+      point.label = p.header?.seq
 
       mapRender.poseContainer.addChild(point)
     })
+
+    // 确保标记层挂在 stage 上（仅 clear/rebuild 后可能丢失）
+    if (mapRender.app?.stage && mapRender.poseContainer.parent !== mapRender.app.stage) {
+      mapRender.app.stage.addChild(mapRender.poseContainer)
+    }
   }
 
   mapRender.changePoseColor = (seq) => {
