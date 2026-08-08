@@ -1,5 +1,5 @@
 <script setup>
-import { useQuasar } from 'quasar'
+import { Notify, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { inject } from 'vue'
 
@@ -11,6 +11,7 @@ const mapState = inject('mapState')
 const mapBoardVisible = inject('mapBoardVisible', null)
 
 let lastSent = { cmd: '', t: 0 }
+const MAP_NAME_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/
 
 function mapCommand (command) {
   const now = Date.now()
@@ -24,6 +25,11 @@ function mapCommand (command) {
   if (command === 'start') {
     mapState.value = 'mapping'
     if (mapBoardVisible) mapBoardVisible.value = true
+  } else if (command.startsWith('save ')) {
+    // 后端 save 成功后会发 idle；本地先退出建图，避免「点了没反应」
+    mapState.value = 'idle'
+    if (mapBoardVisible) mapBoardVisible.value = false
+    Notify.create({ type: 'positive', message: t('amr2d_saveMap_done') })
   }
 }
 
@@ -39,7 +45,12 @@ function saveMap () {
     ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
     persistent: true
   }).onOk(data => {
-    mapCommand('save ' + data)
+    const name = String(data || '').trim()
+    if (!MAP_NAME_RE.test(name)) {
+      Notify.create({ type: 'negative', message: t('amr2d_saveMap_invalid_name') })
+      return
+    }
+    mapCommand('save ' + name)
   })
 }
 </script>
