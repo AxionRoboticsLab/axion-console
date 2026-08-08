@@ -39,6 +39,15 @@ function resetTeleopPose () {
 }
 provide('resetTeleopPose', resetTeleopPose)
 
+/** 导航页：manual | auto（仅前端） */
+const navMode = ref(props.workspace === 'navigation' ? 'auto' : 'manual')
+provide('navMode', navMode)
+
+const showJoystick = computed(() => {
+  if (props.workspace === 'mapping') return true
+  return navMode.value === 'manual'
+})
+
 const visible = computed(() => rosClient.mapState && rosClient.mapState.value === 'terminating')
 
 onMounted(() => {
@@ -53,7 +62,7 @@ onUnmounted(() => {
 <template>
   <div class="amr-page">
     <ros-map2d :workspace="props.workspace"/>
-    <joy-stick/>
+    <joy-stick v-if="showJoystick"/>
     <q-inner-loading
       :showing="visible"
       :label="$t('amr2d_wait')"

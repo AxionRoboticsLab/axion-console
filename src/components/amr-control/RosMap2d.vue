@@ -1,6 +1,7 @@
 <script setup>
 
 import { computed, inject, provide, onMounted, onUnmounted, ref, watch } from 'vue'
+// navMode provided by AmrMapShell
 
 import RosMapPixi from 'components/amr-control/RosMapPixi'
 import RobotRelocate from 'components/amr-control/RobotRelocate.vue'
@@ -36,16 +37,19 @@ provide('mapBoardVisible', mapBoardVisible)
 /** 载入地图后 state 仍是 idle，避免被 idle 监听清空栅格 */
 const keepMapOnIdle = ref(props.workspace === 'navigation')
 provide('keepMapOnIdle', keepMapOnIdle)
-/** 当前已加载的逻辑地图名（导航页切换地图时用于二次确认） */
+/** 当前已加载的逻辑地图名 / DB id */
 const loadedMapName = ref('')
+const loadedMapId = ref(null)
 provide('loadedMapName', loadedMapName)
+provide('loadedMapId', loadedMapId)
+
+const navMode = inject('navMode', ref('auto'))
 
 watch(connected, value => {
   if (value) {
     rosClient.subscribe(controlParam.mapTopic)
     rosClient.subscribe('/robot_pose')
     rosClient.subscribe('/map_state')
-    rosClient.subscribe('/map_file_list')
     rosClient.advertise('/map_command')
     // 勿订阅尚未存在的 move_base 旧话题，否则 rosbridge 刷 ERROR
     const pathTopic = visualization.pathTopic || ''
@@ -172,13 +176,37 @@ const robotRelocate = ref()
 const mapEditMode = computed(() => toolMode.value === 'relocate' || toolMode.value === 'goto')
 
 function setTool (mode) {
+  if (isNavigationWorkspace.value && navMode.value === 'manual' &&
+    (mode === 'relocate' || mode === 'goto' || mode === 'mapPose')) {
+    return
+  }
   toolMode.value = toolMode.value === mode ? 'default' : mode
 }
+
+function setNavMode (mode) {
+  navMode.value = mode
+  toolMode.value = 'default'
+}
+
+const isAutoNav = computed(() => navMode.value === 'auto')
 
 </script>
 
 <template>
-  <div class="amr-toolbar">
+  <div v-if="isNavigationWorkspace" class="nav-mode-tabs">
+    <q-tabs
+      dense
+      narrow-indicator
+      active-color="primary"
+      indicator-color="primary"
+      :model-value="navMode"
+      @update:model-value="setNavMode"
+    >
+      <q-tab name="manual" :label="$t('nav_mode_manual')"/>
+      <q-tab name="auto" :label="$t('nav_mode_auto')"/>
+    </q-tabs>
+  </div>
+  <div class="amr-toolbar" :class="{ 'amr-toolbar--nav': isNavigationWorkspace }">
     <div class="no-wrap flex q-gutter-x-sm justify-center items-center q-pa-sm">
       <template v-if="!mapEditMode">
         <q-btn key="no-focus" no-wrap v-if="focusing" rounded outline :label="$t('amr2d_no_focus')"
@@ -194,40 +222,42 @@ function setTool (mode) {
         <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
       </template>
 
-      <!-- 导航页：三件事拆开 —— 重定位 / 去这里 / 导航点 -->
+      <!-- 导航页：加载地图始终可；自动模式才可重定位/去这里/收藏点 -->
       <template v-else>
         <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
-        <q-btn
-          key="nav-relocate"
-          no-wrap
-          rounded
-          :outline="toolMode !== 'relocate'"
-          :label="$t('nav_relocate')"
-          color="accent"
-          icon="my_location"
-          @click="setTool('relocate')"
-        />
-        <q-btn
-          key="nav-goto"
-          no-wrap
-          rounded
-          :outline="toolMode !== 'goto'"
-          :label="$t('nav_goto')"
-          color="primary"
-          icon="place"
-          @click="setTool('goto')"
-        />
-        <q-btn
-          key="map-pose"
-          no-wrap
-          rounded
-          v-if="!mapEditMode"
-          :outline="toolMode !== 'mapPose'"
-          :label="$t('mapPose')"
-          color="secondary"
-          icon="flag"
-          @click="setTool('mapPose')"
-        />
+        <template v-if="isAutoNav">
+          <q-btn
+            key="nav-relocate"
+            no-wrap
+            rounded
+            :outline="toolMode !== 'relocate'"
+            :label="$t('nav_relocate')"
+            color="accent"
+            icon="my_location"
+            @click="setTool('relocate')"
+          />
+          <q-btn
+            key="nav-goto"
+            no-wrap
+            rounded
+            :outline="toolMode !== 'goto'"
+            :label="$t('nav_goto')"
+            color="primary"
+            icon="place"
+            @click="setTool('goto')"
+          />
+          <q-btn
+            key="map-pose"
+            no-wrap
+            rounded
+            v-if="!mapEditMode"
+            :outline="toolMode !== 'mapPose'"
+            :label="$t('mapPose')"
+            color="secondary"
+            icon="flag"
+            @click="setTool('mapPose')"
+          />
+        </template>
       </template>
     </div>
   </div>
@@ -237,6 +267,15 @@ function setTool (mode) {
 </template>
 
 <style scoped>
+.nav-mode-tabs {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.5rem;
+  z-index: 45;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 0 0.25rem;
+}
 .amr-toolbar {
   position: absolute;
   top: 0;
@@ -245,6 +284,9 @@ function setTool (mode) {
   height: 3.5rem;
   z-index: 40;
   pointer-events: none;
+}
+.amr-toolbar--nav {
+  top: 2.4rem;
 }
 .amr-toolbar :deep(.q-btn),
 .amr-toolbar :deep(.q-btn-dropdown) {

@@ -1,4 +1,6 @@
 <script setup>
+import { upsertMap } from 'src/api/maps'
+import { isValidIdentityName, normalizeIdentityName } from 'src/utils/naming'
 import { Notify, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { inject } from 'vue'
@@ -13,29 +15,19 @@ const keepMapOnIdle = inject('keepMapOnIdle', null)
 const loadedMapName = inject('loadedMapName', null)
 
 let lastSent = { cmd: '', t: 0 }
-const MAP_NAME_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/
 
 function mapCommand (command) {
   const now = Date.now()
-  // 防止连点 / 事件冒泡导致发两次 start
   if (command === lastSent.cmd && now - lastSent.t < 400) {
     return
   }
   lastSent = { cmd: command, t: now }
   publish('/map_command', { data: command })
-  // /map_state 经 rosbridge 可能丢包；本地立即切 UI
   if (command === 'start') {
     if (keepMapOnIdle) keepMapOnIdle.value = false
     if (loadedMapName) loadedMapName.value = ''
     mapState.value = 'mapping'
     if (mapBoardVisible) mapBoardVisible.value = true
-  } else if (command.startsWith('save ')) {
-    // 后端 save 成功后会发 idle；本地先退出建图，避免「点了没反应」
-    if (keepMapOnIdle) keepMapOnIdle.value = false
-    if (mapBoardVisible) mapBoardVisible.value = false
-    if (loadedMapName) loadedMapName.value = ''
-    mapState.value = 'idle'
-    Notify.create({ type: 'positive', message: t('amr2d_saveMap_done') })
   }
 }
 
@@ -45,18 +37,32 @@ function saveMap () {
     message: t('amr2d_saveMap_description'),
     prompt: {
       model: '',
-      type: 'text' // optional
+      type: 'text',
+      isValid: (val) => isValidIdentityName(val)
     },
     cancel: { label: t('cancel'), flat: true, color: 'secondary' },
     ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
     persistent: true
-  }).onOk(data => {
-    const name = String(data || '').trim()
-    if (!MAP_NAME_RE.test(name)) {
+  }).onOk(async (data) => {
+    const name = normalizeIdentityName(data)
+    if (!isValidIdentityName(name)) {
       Notify.create({ type: 'negative', message: t('amr2d_saveMap_invalid_name') })
       return
     }
     mapCommand('save ' + name)
+    if (keepMapOnIdle) keepMapOnIdle.value = false
+    if (mapBoardVisible) mapBoardVisible.value = false
+    if (loadedMapName) loadedMapName.value = ''
+    mapState.value = 'idle'
+    try {
+      await upsertMap(name, true)
+      Notify.create({ type: 'positive', message: t('amr2d_saveMap_done') })
+    } catch (e) {
+      Notify.create({
+        type: 'warning',
+        message: t('amr2d_saveMap_done') + ' / ' + (e.message || t('amr2d_saveMap_db_warn'))
+      })
+    }
   })
 }
 </script>

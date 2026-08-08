@@ -1,9 +1,14 @@
 <script setup>
 /**
- * 导航点（一期）：前端本地管理。
- * 原 ros2d 依赖自定义服务 /pose_list，axion-slam 尚未实现，导致新增无效。
- * 按当前地图名持久化到 localStorage，后续再接后端/Nav2。
+ * 收藏点：edge-agent REST；点击收藏取当前位姿；去这里发 /goal_pose
  */
+import {
+  createWaypoint,
+  deleteWaypoint,
+  listWaypoints,
+  renameWaypoint
+} from 'src/api/maps'
+import { isValidIdentityName, normalizeIdentityName } from 'src/utils/naming'
 import { Notify, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { computed, inject, ref, watch } from 'vue'
@@ -15,6 +20,8 @@ const robotPose = inject('robotPose')
 const mapManager = inject('mapManager')
 const publish = inject('publish')
 const loadedMapName = inject('loadedMapName', null)
+const loadedMapId = inject('loadedMapId', null)
+const navMode = inject('navMode', ref('auto'))
 
 function stampHeader () {
   const now = Date.now()
@@ -24,6 +31,23 @@ function stampHeader () {
       sec: Math.floor(now / 1000),
       nanosec: (now % 1000) * 1e6
     }
+  }
+}
+
+function yawFromQuat (q) {
+  if (!q) return 0
+  return Math.atan2(
+    2 * ((q.w || 0) * (q.z || 0) + (q.x || 0) * (q.y || 0)),
+    1 - 2 * ((q.y || 0) ** 2 + (q.z || 0) ** 2)
+  )
+}
+
+function quatFromYaw (yaw) {
+  return {
+    x: 0,
+    y: 0,
+    z: Math.sin(yaw / 2),
+    w: Math.cos(yaw / 2)
   }
 }
 
@@ -37,28 +61,13 @@ function publishGoalPose (pose) {
   })
 }
 
-const NAME_MAX = 20
-
 const visible = computed(() => pageMode.value === 'mapPose')
 const poseList = ref([])
-const selected = ref('')
-let nextSeq = 1
-
-function storageKey () {
-  const map = loadedMapName?.value || '_default'
-  return `axion.nav_poses.${map}`
-}
-
-function clampName (name, seq) {
-  const fallback = t('mapPose_default_name', { id: seq })
-  const raw = String(name == null || name === '' ? fallback : name).trim()
-  return raw.slice(0, NAME_MAX) || fallback
-}
+const selected = ref(null)
+const loading = ref(false)
 
 function normalizePose (raw) {
   if (!raw) return null
-  // PoseStamped: { header, pose: { position, orientation } }
-  // 或扁平: { position, orientation }
   const pose = raw.pose?.position ? raw.pose : raw
   if (!pose?.position || !pose?.orientation) return null
   return {
@@ -82,51 +91,15 @@ function currentRobotPose () {
     null
 }
 
-function toStamped (pose, seq, name) {
+function toUiItem (row) {
   return {
-    header: {
-      seq,
-      frame_id: 'map',
-      stamp: { sec: 0, nanosec: 0 }
+    id: row.id,
+    name: row.name,
+    pose: {
+      position: { x: row.x, y: row.y, z: 0 },
+      orientation: quatFromYaw(row.yaw || 0)
     },
-    name: clampName(name, seq),
-    pose
-  }
-}
-
-function normalizeStoredItem (item) {
-  const seq = item?.header?.seq ?? 0
-  const pose = normalizePose(item)
-  if (!pose) return null
-  return toStamped(pose, seq, item.name)
-}
-
-function persist () {
-  try {
-    localStorage.setItem(storageKey(), JSON.stringify({
-      nextSeq,
-      poses: poseList.value
-    }))
-  } catch (e) {
-    console.warn('[PoseManager] persist failed', e)
-  }
-}
-
-function loadLocal () {
-  try {
-    const raw = localStorage.getItem(storageKey())
-    if (!raw) {
-      poseList.value = []
-      nextSeq = 1
-      return
-    }
-    const data = JSON.parse(raw)
-    const list = Array.isArray(data.poses) ? data.poses : []
-    poseList.value = list.map(normalizeStoredItem).filter(Boolean)
-    nextSeq = Number(data.nextSeq) || (poseList.value.reduce((m, p) => Math.max(m, p.header.seq), 0) + 1)
-  } catch (e) {
-    poseList.value = []
-    nextSeq = 1
+    header: { seq: row.id, frame_id: 'map' }
   }
 }
 
@@ -134,101 +107,134 @@ function refreshMapMarkers () {
   mapManager?.loadPoseList?.(poseList.value)
 }
 
+async function reloadPoses () {
+  const mapId = loadedMapId?.value
+  if (!mapId) {
+    poseList.value = []
+    refreshMapMarkers()
+    return
+  }
+  loading.value = true
+  try {
+    const rows = await listWaypoints(mapId)
+    poseList.value = (rows || []).map(toUiItem)
+    refreshMapMarkers()
+  } catch (e) {
+    console.warn('[PoseManager] list failed', e)
+    Notify.create({ type: 'negative', message: e.message || t('mapPose_empty') })
+  } finally {
+    loading.value = false
+  }
+}
+
 watch(visible, (value) => {
   if (value) {
-    loadLocal()
-    refreshMapMarkers()
+    reloadPoses()
   } else {
     mapManager?.loadPoseList?.([])
   }
 })
 
-watch(() => loadedMapName?.value, () => {
+watch(() => loadedMapId?.value, () => {
   if (!visible.value) return
-  loadLocal()
-  refreshMapMarkers()
+  reloadPoses()
 })
 
-function addPose () {
+function promptName (title, initial = '') {
+  return new Promise((resolve) => {
+    $q.dialog({
+      title,
+      message: t('identity_name_hint'),
+      prompt: {
+        model: initial,
+        type: 'text',
+        isValid: (val) => isValidIdentityName(val),
+        maxlength: 20
+      },
+      cancel: { label: t('cancel'), flat: true, color: 'secondary' },
+      ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
+      persistent: true
+    }).onOk((val) => resolve(normalizeIdentityName(val)))
+      .onCancel(() => resolve(null))
+  })
+}
+
+async function addPose () {
+  if (navMode?.value === 'manual') {
+    Notify.create({ type: 'warning', message: t('nav_mode_auto_required') })
+    return
+  }
+  const mapId = loadedMapId?.value
+  if (!mapId) {
+    Notify.create({ type: 'warning', message: t('mapPose_need_map') })
+    return
+  }
   const pose = currentRobotPose()
   if (!pose) {
     Notify.create({ type: 'warning', message: t('mapPose_no_robot') })
     return
   }
-  const seq = nextSeq++
-  const stamped = toStamped(pose, seq, t('mapPose_default_name', { id: seq }))
-  poseList.value = [...poseList.value, stamped]
-  persist()
-  refreshMapMarkers()
-  selected.value = stamped.header.seq
-  mapManager?.changePoseColor?.(stamped.header.seq)
-  Notify.create({
-    type: 'positive',
-    message: t('mapPose_added', { name: stamped.name })
-  })
-  // 新增后直接引导改名
-  editName(stamped)
+  const name = await promptName(t('mapPose_add'))
+  if (!name) return
+  try {
+    const row = await createWaypoint(mapId, {
+      name,
+      x: pose.position.x,
+      y: pose.position.y,
+      yaw: yawFromQuat(pose.orientation)
+    })
+    await reloadPoses()
+    selected.value = row.id
+    mapManager?.changePoseColor?.(row.id)
+    Notify.create({ type: 'positive', message: t('mapPose_added', { name: row.name }) })
+  } catch (e) {
+    Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })
+  }
 }
 
-function savePoses () {
-  persist()
-  Notify.create({ type: 'positive', message: t('mapPose_saved', { n: poseList.value.length }) })
-}
-
-function reloadPoses () {
-  loadLocal()
-  refreshMapMarkers()
-  Notify.create({ type: 'info', message: t('mapPose_reloaded', { n: poseList.value.length }) })
-}
-
-function choose (pose) {
-  selected.value = pose.header.seq
-  mapManager?.changePoseColor?.(pose.header.seq)
-  if (pose?.pose) {
-    mapManager?.updateTargetPose?.(pose.pose)
+function choose (item) {
+  if (navMode?.value === 'manual') {
+    Notify.create({ type: 'warning', message: t('nav_mode_auto_required') })
+    return
+  }
+  selected.value = item.id
+  mapManager?.changePoseColor?.(item.id)
+  if (item?.pose) {
+    mapManager?.updateTargetPose?.(item.pose)
     try {
-      publishGoalPose(pose.pose)
+      publishGoalPose(item.pose)
       Notify.create({ type: 'positive', message: t('nav_goto_done') })
     } catch (e) {
-      console.warn('[PoseManager] goal_pose failed', e)
       Notify.create({ type: 'negative', message: t('nav_publish_failed') })
     }
   }
 }
 
-function editName (pose) {
-  $q.dialog({
-    title: t('mapPose_rename_title'),
-    message: t('mapPose_rename_hint', { max: NAME_MAX }),
-    prompt: {
-      model: pose.name || '',
-      type: 'text',
-      isValid: (val) => String(val || '').trim().length > 0 && String(val).trim().length <= NAME_MAX,
-      maxlength: NAME_MAX
-    },
-    cancel: { label: t('cancel'), flat: true, color: 'secondary' },
-    ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
-    persistent: true
-  }).onOk((val) => {
-    const name = clampName(val, pose.header.seq)
-    poseList.value = poseList.value.map((p) => {
-      if (p.header.seq !== pose.header.seq) return p
-      return { ...p, name }
-    })
-    persist()
+async function editName (item) {
+  const name = await promptName(t('mapPose_rename_title'), item.name)
+  if (!name || !loadedMapId?.value) return
+  try {
+    await renameWaypoint(loadedMapId.value, item.id, name)
+    await reloadPoses()
     Notify.create({ type: 'positive', message: t('mapPose_renamed', { name }) })
-  })
+  } catch (e) {
+    Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })
+  }
 }
 
-function removeSelected () {
-  if (selected.value === '' || selected.value == null) {
+async function removeSelected () {
+  if (selected.value == null) {
     Notify.create({ type: 'warning', message: t('mapPose_select_first') })
     return
   }
-  poseList.value = poseList.value.filter(p => p.header.seq !== selected.value)
-  selected.value = ''
-  persist()
-  refreshMapMarkers()
+  if (!loadedMapId?.value) return
+  try {
+    await deleteWaypoint(loadedMapId.value, selected.value)
+    selected.value = null
+    await reloadPoses()
+  } catch (e) {
+    Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })
+  }
 }
 </script>
 
@@ -238,25 +244,25 @@ function removeSelected () {
       <q-card-section class="text-h6">
         {{ $t('mapPose_title') }}
         <div class="text-caption text-grey-7 text-weight-regular">
-          {{ loadedMapName ? $t('amr2d_loadMap_current', { name: loadedMapName }) : $t('mapPose_local_hint') }}
+          {{ loadedMapName ? $t('amr2d_loadMap_current', { name: loadedMapName }) : $t('mapPose_need_map') }}
         </div>
       </q-card-section>
       <q-separator/>
       <q-card-section>
+        <q-inner-loading :showing="loading"/>
         <q-list v-if="poseList.length" bordered separator dense style="overflow: auto; max-height: 30vh">
           <q-item
             v-for="item in poseList"
-            :key="item.header.seq"
+            :key="item.id"
             clickable
             v-ripple
-            :active="selected === item.header.seq"
+            :active="selected === item.id"
             active-class="bg-teal-5 text-white"
             @click="choose(item)"
           >
             <q-item-section>
               <q-item-label>{{ item.name }}</q-item-label>
               <q-item-label caption>
-                #{{ item.header.seq }}
                 ({{ item.pose.position.x.toFixed(2) }}, {{ item.pose.position.y.toFixed(2) }})
               </q-item-label>
             </q-item-section>
@@ -283,7 +289,6 @@ function removeSelected () {
     <div class="q-pa-sm blur">
       <div class="flex justify-center q-gutter-sm">
         <q-btn :label="$t('mapPose_add')" icon="add" color="primary" @click="addPose"/>
-        <q-btn :label="$t('mapPose_save')" icon="save" color="secondary" @click="savePoses"/>
         <q-btn :label="$t('mapPose_load')" icon="sync" color="primary" @click="reloadPoses"/>
         <q-btn :label="$t('mapPose_remove')" icon="delete" color="negative" outline @click="removeSelected"/>
       </div>
