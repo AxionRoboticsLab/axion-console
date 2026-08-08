@@ -1,12 +1,12 @@
 <script setup>
 /**
- * 收藏点：edge-agent REST；点击收藏取当前位姿；去这里发 /goal_pose
+ * 巡检点：edge-agent REST；新增取当前位姿；点击发 /goal_pose
  */
 import {
-  createWaypoint,
-  deleteWaypoint,
-  listWaypoints,
-  renameWaypoint
+  createPatrolPoint,
+  deletePatrolPoint,
+  listPatrolPoints,
+  renamePatrolPoint
 } from 'src/api/maps'
 import { isValidIdentityName, normalizeIdentityName } from 'src/utils/naming'
 import { Notify, useQuasar } from 'quasar'
@@ -61,7 +61,7 @@ function publishGoalPose (pose) {
   })
 }
 
-const visible = computed(() => pageMode.value === 'mapPose')
+const visible = computed(() => pageMode.value === 'patrol')
 const poseList = ref([])
 const selected = ref(null)
 const loading = ref(false)
@@ -116,12 +116,12 @@ async function reloadPoses () {
   }
   loading.value = true
   try {
-    const rows = await listWaypoints(mapId)
+    const rows = await listPatrolPoints(mapId)
     poseList.value = (rows || []).map(toUiItem)
     refreshMapMarkers()
   } catch (e) {
     console.warn('[PoseManager] list failed', e)
-    Notify.create({ type: 'negative', message: e.message || t('mapPose_empty') })
+    Notify.create({ type: 'negative', message: e.message || t('patrol_empty') })
   } finally {
     loading.value = false
   }
@@ -166,18 +166,18 @@ async function addPose () {
   }
   const mapId = loadedMapId?.value
   if (!mapId) {
-    Notify.create({ type: 'warning', message: t('mapPose_need_map') })
+    Notify.create({ type: 'warning', message: t('patrol_need_map') })
     return
   }
   const pose = currentRobotPose()
   if (!pose) {
-    Notify.create({ type: 'warning', message: t('mapPose_no_robot') })
+    Notify.create({ type: 'warning', message: t('patrol_no_robot') })
     return
   }
-  const name = await promptName(t('mapPose_add'))
+  const name = await promptName(t('patrol_add'))
   if (!name) return
   try {
-    const row = await createWaypoint(mapId, {
+    const row = await createPatrolPoint(mapId, {
       name,
       x: pose.position.x,
       y: pose.position.y,
@@ -186,7 +186,7 @@ async function addPose () {
     await reloadPoses()
     selected.value = row.id
     mapManager?.changePoseColor?.(row.id)
-    Notify.create({ type: 'positive', message: t('mapPose_added', { name: row.name }) })
+    Notify.create({ type: 'positive', message: t('patrol_added', { name: row.name }) })
   } catch (e) {
     Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })
   }
@@ -211,12 +211,12 @@ function choose (item) {
 }
 
 async function editName (item) {
-  const name = await promptName(t('mapPose_rename_title'), item.name)
+  const name = await promptName(t('patrol_rename_title'), item.name)
   if (!name || !loadedMapId?.value) return
   try {
-    await renameWaypoint(loadedMapId.value, item.id, name)
+    await renamePatrolPoint(loadedMapId.value, item.id, name)
     await reloadPoses()
-    Notify.create({ type: 'positive', message: t('mapPose_renamed', { name }) })
+    Notify.create({ type: 'positive', message: t('patrol_renamed', { name }) })
   } catch (e) {
     Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })
   }
@@ -224,12 +224,12 @@ async function editName (item) {
 
 async function removeSelected () {
   if (selected.value == null) {
-    Notify.create({ type: 'warning', message: t('mapPose_select_first') })
+    Notify.create({ type: 'warning', message: t('patrol_select_first') })
     return
   }
   if (!loadedMapId?.value) return
   try {
-    await deleteWaypoint(loadedMapId.value, selected.value)
+    await deletePatrolPoint(loadedMapId.value, selected.value)
     selected.value = null
     await reloadPoses()
   } catch (e) {
@@ -242,9 +242,9 @@ async function removeSelected () {
   <q-dialog v-model="visible" seamless :position="$q.screen.lt.sm ? 'top' : 'right'">
     <q-card style="min-width: 16rem">
       <q-card-section class="text-h6">
-        {{ $t('mapPose_title') }}
+        {{ $t('patrol_title') }}
         <div class="text-caption text-grey-7 text-weight-regular">
-          {{ loadedMapName ? $t('amr2d_loadMap_current', { name: loadedMapName }) : $t('mapPose_need_map') }}
+          {{ loadedMapName ? $t('amr2d_loadMap_current', { name: loadedMapName }) : $t('patrol_need_map') }}
         </div>
       </q-card-section>
       <q-separator/>
@@ -273,14 +273,14 @@ async function removeSelected () {
                 round
                 size="sm"
                 icon="edit"
-                :aria-label="$t('mapPose_rename_title')"
+                :aria-label="$t('patrol_rename_title')"
                 @click.stop="editName(item)"
               />
             </q-item-section>
           </q-item>
         </q-list>
         <div v-else class="text-grey-7 text-body2">
-          {{ $t('mapPose_empty') }}
+          {{ $t('patrol_empty') }}
         </div>
       </q-card-section>
     </q-card>
@@ -288,9 +288,9 @@ async function removeSelected () {
   <q-dialog seamless v-model="visible" position="bottom">
     <div class="q-pa-sm blur">
       <div class="flex justify-center q-gutter-sm">
-        <q-btn :label="$t('mapPose_add')" icon="add" color="primary" @click="addPose"/>
-        <q-btn :label="$t('mapPose_load')" icon="sync" color="primary" @click="reloadPoses"/>
-        <q-btn :label="$t('mapPose_remove')" icon="delete" color="negative" outline @click="removeSelected"/>
+        <q-btn :label="$t('patrol_add')" icon="add" color="primary" @click="addPose"/>
+        <q-btn :label="$t('patrol_reload')" icon="sync" color="primary" @click="reloadPoses"/>
+        <q-btn :label="$t('patrol_remove')" icon="delete" color="negative" outline @click="removeSelected"/>
       </div>
     </div>
   </q-dialog>

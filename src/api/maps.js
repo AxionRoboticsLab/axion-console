@@ -30,18 +30,18 @@ export function deleteMap (mapId) {
   return unwrap(api.delete(`/maps/${mapId}`))
 }
 
-export function listWaypoints (mapId) {
-  return unwrap(api.get(`/maps/${mapId}/waypoints`)).then((data) => data || [])
+export function listPatrolPoints (mapId) {
+  return unwrap(api.get(`/maps/${mapId}/patrol_points`)).then((data) => data || [])
 }
 
-export function createWaypoint (mapId, { name, x, y, yaw }) {
-  return unwrap(api.post(`/maps/${mapId}/waypoints`, { name, x, y, yaw }))
+export function createPatrolPoint (mapId, { name, x, y, yaw }) {
+  return unwrap(api.post(`/maps/${mapId}/patrol_points`, { name, x, y, yaw }))
 }
 
-export function renameWaypoint (mapId, waypointId, name) {
-  return unwrap(api.patch(`/maps/${mapId}/waypoints/${waypointId}`, { name }))
+export function renamePatrolPoint (mapId, pointId, name) {
+  return unwrap(api.patch(`/maps/${mapId}/patrol_points/${pointId}`, { name }))
 }
 
-export function deleteWaypoint (mapId, waypointId) {
-  return unwrap(api.delete(`/maps/${mapId}/waypoints/${waypointId}`))
+export function deletePatrolPoint (mapId, pointId) {
+  return unwrap(api.delete(`/maps/${mapId}/patrol_points/${pointId}`))
 }

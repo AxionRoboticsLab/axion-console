@@ -166,7 +166,7 @@ watch(mapState, value => {
 
 /**
  * 工具子模式：
- * default | relocate（重定位）| goto（去这里）| mapPose（收藏的导航点）
+ * default | relocate（重定位）| goto（去这里）| patrol（巡检点）
  */
 const toolMode = ref('default')
 provide('pageMode', toolMode)
@@ -177,7 +177,7 @@ const mapEditMode = computed(() => toolMode.value === 'relocate' || toolMode.val
 
 function setTool (mode) {
   if (isNavigationWorkspace.value && navMode.value === 'manual' &&
-    (mode === 'relocate' || mode === 'goto' || mode === 'mapPose')) {
+    (mode === 'relocate' || mode === 'goto' || mode === 'patrol')) {
     return
   }
   toolMode.value = toolMode.value === mode ? 'default' : mode
@@ -222,7 +222,7 @@ const isAutoNav = computed(() => navMode.value === 'auto')
         <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
       </template>
 
-      <!-- 导航页：加载地图始终可；自动模式才可重定位/去这里/收藏点 -->
+      <!-- 导航页：加载地图始终可；自动模式才可重定位/去这里/巡检点 -->
       <template v-else>
         <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
         <template v-if="isAutoNav">
@@ -247,15 +247,15 @@ const isAutoNav = computed(() => navMode.value === 'auto')
             @click="setTool('goto')"
           />
           <q-btn
-            key="map-pose"
+            key="patrol"
             no-wrap
             rounded
             v-if="!mapEditMode"
-            :outline="toolMode !== 'mapPose'"
-            :label="$t('mapPose')"
+            :outline="toolMode !== 'patrol'"
+            :label="$t('patrol')"
             color="secondary"
             icon="flag"
-            @click="setTool('mapPose')"
+            @click="setTool('patrol')"
           />
         </template>
       </template>
@@ -263,7 +263,7 @@ const isAutoNav = computed(() => navMode.value === 'auto')
   </div>
   <canvas ref="pixiContainer" class="map-canvas"/>
   <RobotRelocate v-if="isNavigationWorkspace" ref="robotRelocate"/>
-  <pose-manager v-if="isNavigationWorkspace && toolMode === 'mapPose'"/>
+  <pose-manager v-if="isNavigationWorkspace && toolMode === 'patrol'"/>
 </template>
 
 <style scoped>
