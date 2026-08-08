@@ -199,7 +199,7 @@ export default {
   amr2d_loadMap_empty: 'There has no map file',
   amr2d_loadMap_loading: 'Fetching map list…',
   amr2d_loadMap_failed: 'Could not list maps; ensure map_manager is running with list support',
-  amr2d_loadMap_hint: 'Maps are stored on the axion-slam host: ~/data/maps/{name}_2dmap.pgm/.yaml',
+  amr2d_loadMap_hint: 'Maps are stored on the axion-slam host: ~/data/maps/<name>_2dmap.pgm and .yaml',
   amr2d_loadMap_done: 'Load map requested',
   amr2d_loadMap_current: 'Current map: {name}',
   amr2d_loadMap_already: 'Map {name} is already loaded',

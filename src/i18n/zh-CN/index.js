@@ -199,7 +199,7 @@ export default {
   amr2d_loadMap_empty: '当前没有地图文件',
   amr2d_loadMap_loading: '正在查询地图列表…',
   amr2d_loadMap_failed: '未能自动列出地图，请确认 map_manager 已启动且已部署 list 命令',
-  amr2d_loadMap_hint: '地图保存在运行 axion-slam 的机器上：~/data/maps/{名字}_2dmap.pgm/.yaml',
+  amr2d_loadMap_hint: '地图保存在运行 axion-slam 的机器上：~/data/maps/<名字>_2dmap.pgm 与 .yaml',
   amr2d_loadMap_done: '已请求加载地图',
   amr2d_loadMap_current: '当前地图：{name}',
   amr2d_loadMap_already: '已加载地图 {name}',
