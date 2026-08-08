@@ -13,7 +13,29 @@ const { t } = useI18n()
 const pageMode = inject('pageMode')
 const robotPose = inject('robotPose')
 const mapManager = inject('mapManager')
+const publish = inject('publish')
 const loadedMapName = inject('loadedMapName', null)
+
+function stampHeader () {
+  const now = Date.now()
+  return {
+    frame_id: 'map',
+    stamp: {
+      sec: Math.floor(now / 1000),
+      nanosec: (now % 1000) * 1e6
+    }
+  }
+}
+
+function publishGoalPose (pose) {
+  publish('/goal_pose', {
+    header: stampHeader(),
+    pose: {
+      position: { ...pose.position },
+      orientation: { ...pose.orientation }
+    }
+  })
+}
 
 const NAME_MAX = 20
 
@@ -162,10 +184,15 @@ function reloadPoses () {
 function choose (pose) {
   selected.value = pose.header.seq
   mapManager?.changePoseColor?.(pose.header.seq)
-  // 尚未接 Nav2：点击收藏点 = 设为「去这里」的目标
   if (pose?.pose) {
     mapManager?.updateTargetPose?.(pose.pose)
-    Notify.create({ type: 'info', message: t('nav_goto_done') })
+    try {
+      publishGoalPose(pose.pose)
+      Notify.create({ type: 'positive', message: t('nav_goto_done') })
+    } catch (e) {
+      console.warn('[PoseManager] goal_pose failed', e)
+      Notify.create({ type: 'negative', message: t('nav_publish_failed') })
+    }
   }
 }
 

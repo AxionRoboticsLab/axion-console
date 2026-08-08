@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 
 export const useVisualization = defineStore('visualization', {
   state: () => ({
-    // Nav2 通车前默认关闭：旧默认 /move_base/NavfnROS/plan 不存在，会刷 rosbridge 报错
-    pathEnable: false,
+    // axion-nav mock 发布 /plan；旧 localStorage 若仍关 path，可在可视化设置打开
+    pathEnable: true,
     pathTopic: '/plan',
     trajectoryEnable: false,
     trajectoryTopic: '/robot_path',

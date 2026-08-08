@@ -1,8 +1,6 @@
 <script setup>
 /**
- * 简化交互：
- * - relocate：点地图设「机器人当前在哪」+ 朝向
- * - goto：点地图设「要去哪」+ 朝向（Nav2 通车前仅画布目标）
+ * 重定位 → /initialpose；去这里 → /goal_pose（axion-nav mock / 后续 Nav2）
  */
 import { Notify } from 'quasar'
 import { useI18n } from 'vue-i18n'
@@ -12,6 +10,7 @@ const { t } = useI18n()
 const pageMode = inject('pageMode')
 const robotPose = inject('robotPose')
 const mapManager = inject('mapManager')
+const publish = inject('publish')
 
 /** pageMode: relocate | goto */
 const mode = computed(() => pageMode.value)
@@ -37,6 +36,44 @@ const hint = computed(() => {
   }
   return ''
 })
+
+function stampHeader () {
+  const now = Date.now()
+  return {
+    frame_id: 'map',
+    stamp: {
+      sec: Math.floor(now / 1000),
+      nanosec: (now % 1000) * 1e6
+    }
+  }
+}
+
+function publishInitialPose (pose) {
+  const covariance = Array(36).fill(0)
+  covariance[0] = 0.25
+  covariance[7] = 0.25
+  covariance[35] = 0.07
+  publish('/initialpose', {
+    header: stampHeader(),
+    pose: {
+      pose: {
+        position: { ...pose.position },
+        orientation: { ...pose.orientation }
+      },
+      covariance
+    }
+  })
+}
+
+function publishGoalPose (pose) {
+  publish('/goal_pose', {
+    header: stampHeader(),
+    pose: {
+      position: { ...pose.position },
+      orientation: { ...pose.orientation }
+    }
+  })
+}
 
 function resetInteraction () {
   step.value = 'position'
@@ -121,10 +158,22 @@ function confirm () {
   }
   if (mode.value === 'relocate') {
     mapManager.updateRobotPose(tempPose.value)
-    Notify.create({ type: 'positive', message: t('nav_relocate_done') })
+    try {
+      publishInitialPose(tempPose.value)
+      Notify.create({ type: 'positive', message: t('nav_relocate_done') })
+    } catch (e) {
+      console.warn('[RobotRelocate] initialpose failed', e)
+      Notify.create({ type: 'negative', message: t('nav_publish_failed') })
+    }
   } else {
     mapManager.updateTargetPose(tempPose.value)
-    Notify.create({ type: 'positive', message: t('nav_goto_done') })
+    try {
+      publishGoalPose(tempPose.value)
+      Notify.create({ type: 'positive', message: t('nav_goto_done') })
+    } catch (e) {
+      console.warn('[RobotRelocate] goal_pose failed', e)
+      Notify.create({ type: 'negative', message: t('nav_publish_failed') })
+    }
   }
   pageMode.value = 'default'
 }

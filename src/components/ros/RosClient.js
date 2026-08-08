@@ -42,8 +42,19 @@ export default function RosClient () {
     if (topic === controlParams.cmdTopic) {
       return isRos2() ? 'geometry_msgs/msg/Twist' : 'geometry_msgs/Twist'
     }
-    if (topic === '/robot_pose') {
+    if (topic === '/robot_pose' || topic === '/goal_pose') {
       return isRos2() ? 'geometry_msgs/msg/PoseStamped' : 'geometry_msgs/PoseStamped'
+    }
+    if (topic === '/initialpose') {
+      return isRos2()
+        ? 'geometry_msgs/msg/PoseWithCovarianceStamped'
+        : 'geometry_msgs/PoseWithCovarianceStamped'
+    }
+    if (topic === '/plan') {
+      return isRos2() ? 'nav_msgs/msg/Path' : 'nav_msgs/Path'
+    }
+    if (topic === '/nav_state') {
+      return stringType()
     }
     return undefined
   }
@@ -103,6 +114,8 @@ export default function RosClient () {
       // 浏览器侧发布前需 advertise，否则部分 rosbridge 会丢弃无 type 的 publish
       rosClient.advertise('/map_command', stringType())
       rosClient.advertise(controlParams.cmdTopic)
+      rosClient.advertise('/initialpose')
+      rosClient.advertise('/goal_pose')
       Notify.create({ type: 'positive', message: t('notify_ros_connect') })
     }
 
