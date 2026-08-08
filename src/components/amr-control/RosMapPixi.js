@@ -77,6 +77,7 @@ export default function () {
     const c = mapRender.mapCenter()
     mapRender.robot.x = c.x
     mapRender.robot.y = -c.y
+    mapRender.robot.rotation = 0
     mapRender.pose = {
       position: { x: c.x, y: c.y, z: 0 },
       orientation: { x: 0, y: 0, z: 0, w: 1 }
@@ -108,7 +109,8 @@ export default function () {
     const clamped = mapRender.clampWorld(pose.position.x, pose.position.y)
     mapRender.robot.x = clamped.x
     mapRender.robot.y = -clamped.y
-    mapRender.robot.rotation = (90 + mapRender.quaternionToTheta(pose.orientation)) * Math.PI / 180
+    // 箭头贴图朝上；yaw=0 朝屏幕上方（与摇杆「上」一致）
+    mapRender.robot.rotation = -mapRender.quaternionToTheta(pose.orientation) * Math.PI / 180
     mapRender.pose = {
       position: { x: clamped.x, y: clamped.y, z: pose.position.z || 0 },
       orientation: pose.orientation

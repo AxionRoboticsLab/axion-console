@@ -35,8 +35,9 @@ function initJoyStick () {
     linearX.value = 0
     linearY.value = 0
   }).on('move', function (evt, data) {
-    linearX.value = data.vector.y * controlParams.linearRatio
-    linearY.value = -data.vector.x * controlParams.linearRatio
+    // 屏幕/地图坐标：右=+x，上=+y（与画板一致，不再用车体坐标系）
+    linearX.value = data.vector.x * controlParams.linearRatio
+    linearY.value = data.vector.y * controlParams.linearRatio
   })
 
   nipplejs.create({
@@ -49,7 +50,8 @@ function initJoyStick () {
   }).on('end', function () {
     angular.value = 0
   }).on('move', function (evt, data) {
-    angular.value = -(data.vector.x * controlParams.angularRatio)
+    // 右拨：箭头顺时针（屏幕观感）
+    angular.value = data.vector.x * controlParams.angularRatio
   })
 }
 
@@ -97,25 +99,25 @@ function initKeyboardCtrl () {
       switch (e.code) {
         case 'KeyW':
         case 'ArrowUp':
-          linearX.value = controlParams.linearRatio
+          linearY.value = controlParams.linearRatio
           break
         case 'KeyS':
         case 'ArrowDown':
-          linearX.value = -controlParams.linearRatio
-          break
-        case 'KeyA':
-          linearY.value = controlParams.linearRatio
-          break
-        case 'KeyD':
           linearY.value = -controlParams.linearRatio
           break
-        case 'KeyJ':
+        case 'KeyA':
         case 'ArrowLeft':
-          angular.value = controlParams.angularRatio
+          linearX.value = -controlParams.linearRatio
+          break
+        case 'KeyD':
+        case 'ArrowRight':
+          linearX.value = controlParams.linearRatio
+          break
+        case 'KeyJ':
+          angular.value = -controlParams.angularRatio
           break
         case 'KeyL':
-        case 'ArrowRight':
-          angular.value = -controlParams.angularRatio
+          angular.value = controlParams.angularRatio
           break
       }
     }
@@ -125,16 +127,16 @@ function initKeyboardCtrl () {
         case 'KeyS':
         case 'ArrowDown':
         case 'ArrowUp':
-          linearX.value = 0
+          linearY.value = 0
           break
         case 'KeyA':
         case 'KeyD':
-          linearY.value = 0
+        case 'ArrowLeft':
+        case 'ArrowRight':
+          linearX.value = 0
           break
         case 'KeyJ':
         case 'KeyL':
-        case 'ArrowLeft':
-        case 'ArrowRight':
           angular.value = 0
           break
       }

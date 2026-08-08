@@ -75,11 +75,12 @@ onMounted(() => {
     teleopLastMs = now
     const t = teleop.value
     if (!t.vx && !t.vy && !t.wz) return
-    const c = Math.cos(t.yaw)
-    const s = Math.sin(t.yaw)
-    t.x += (c * t.vx - s * t.vy) * dt
-    t.y += (s * t.vx + c * t.vy) * dt
+
+    // 屏幕/地图系平移：摇杆方向 = 画板方向（不受航向耦合）
+    t.x += t.vx * dt
+    t.y += t.vy * dt
     t.yaw += t.wz * dt
+
     const clamped = mapManager.clampWorld?.(t.x, t.y) || { x: t.x, y: t.y }
     t.x = clamped.x
     t.y = clamped.y
@@ -99,14 +100,8 @@ onUnmounted(() => {
   if (teleopTimer) clearInterval(teleopTimer)
 })
 
-const robotPose = inject('robotPose')
-watch(robotPose, value => {
-  if (pageMode.value === 'navigation' || !value || !mapBoardVisible.value) return
-  const pose = value.pose?.position ? value.pose : value.pose?.pose
-  if (!pose) return
-  if (teleop && (teleop.value.vx || teleop.value.vy || teleop.value.wz)) return
-  mapManager.updateRobotPose(pose)
-}, { deep: true })
+// 建图板显示期间以本地摇杆积分为准，不应用 /robot_pose：
+// 松手后再同步后端位姿会被 teleop_scale 放大后的坐标拽出画板。
 
 watch(mapState, value => {
   if (value === 'mapping') {
