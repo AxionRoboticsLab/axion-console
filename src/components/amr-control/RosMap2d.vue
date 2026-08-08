@@ -36,6 +36,9 @@ provide('mapBoardVisible', mapBoardVisible)
 /** 载入地图后 state 仍是 idle，避免被 idle 监听清空栅格 */
 const keepMapOnIdle = ref(props.workspace === 'navigation')
 provide('keepMapOnIdle', keepMapOnIdle)
+/** 当前已加载的逻辑地图名（导航页切换地图时用于二次确认） */
+const loadedMapName = ref('')
+provide('loadedMapName', loadedMapName)
 
 watch(connected, value => {
   if (value) {
@@ -143,10 +146,12 @@ watch(mapState, value => {
       return
     }
     mapBoardVisible.value = false
+    loadedMapName.value = ''
     mapManager.clearMap?.()
     resetTeleopPose()
   } else if (value === 'terminating') {
     keepMapOnIdle.value = false
+    loadedMapName.value = ''
     resetTeleopPose()
   }
 })

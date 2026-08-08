@@ -11,10 +11,11 @@ const rosClient = inject('rosClient')
 const publish = inject('publish')
 const mapBoardVisible = inject('mapBoardVisible', null)
 const keepMapOnIdle = inject('keepMapOnIdle', null)
+const loadedMapName = inject('loadedMapName', null)
+const mapManager = inject('mapManager', null)
 
 const maps = ref([])
 const mapId = ref('')
-const manualName = ref('')
 
 function parseNames (message) {
   return String(message || '')
@@ -25,14 +26,12 @@ function parseNames (message) {
 }
 
 async function fetchNames () {
-  // 1) 话题路径（与建图命令同一通道，最稳）
   try {
-    const message = await rosClient.requestMapList(5000)
+    const message = await rosClient.requestMapList(6000)
     return parseNames(message)
   } catch (e) {
     console.warn('[MapSelector] topic list failed', e)
   }
-  // 2) 兼容旧服务（rosbridge 上常超时）
   try {
     const response = await rosClient.call('/get_map_files', {}, { timeoutMs: 3000 })
     const message = response?.values?.message ?? response?.values?.[0]?.message ?? ''
@@ -48,15 +47,13 @@ async function show () {
   loading.value = true
   maps.value = []
   mapId.value = ''
-  manualName.value = ''
   visible.value = true
   try {
     maps.value = await fetchNames()
-    if (maps.value.length === 1) {
+    if (loadedMapName?.value && maps.value.some(m => m.value === loadedMapName.value)) {
+      mapId.value = loadedMapName.value
+    } else if (maps.value.length === 1) {
       mapId.value = maps.value[0].value
-    }
-    if (maps.value.length === 0) {
-      Notify.create({ type: 'warning', message: t('amr2d_loadMap_failed') })
     }
   } finally {
     loading.value = false
@@ -72,28 +69,48 @@ function applyLoad (name) {
   publish('/map_command', { data: 'load ' + mapName })
   if (keepMapOnIdle) keepMapOnIdle.value = true
   if (mapBoardVisible) mapBoardVisible.value = true
+  if (loadedMapName) loadedMapName.value = mapName
   visible.value = false
   Notify.create({ type: 'positive', message: t('amr2d_loadMap_done') + `: ${mapName}` })
 }
 
+function hasLoadedMap () {
+  return Boolean(loadedMapName?.value) || Boolean(mapManager?.map)
+}
+
 function selectMap () {
-  if (mapId.value) {
-    applyLoad(mapId.value)
+  if (!mapId.value) {
+    Notify.create({ type: 'warning', message: t('amr2d_loadMap_description') })
     return
   }
-  if (manualName.value) {
-    applyLoad(manualName.value)
+  const current = loadedMapName?.value || ''
+  if (current && current === mapId.value) {
+    Notify.create({ type: 'info', message: t('amr2d_loadMap_already', { name: current }) })
+    visible.value = false
     return
   }
-  // 列表失败时弹窗手输（磁盘上有 v1 即可直接 load）
-  $q.dialog({
-    title: t('amr2d_loadMap'),
-    message: t('amr2d_loadMap_manual'),
-    prompt: { model: 'v1', type: 'text' },
-    cancel: { label: t('cancel'), flat: true, color: 'secondary' },
-    ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
-    persistent: true
-  }).onOk((data) => applyLoad(data))
+  if (hasLoadedMap() && current && current !== mapId.value) {
+    $q.dialog({
+      title: t('amr2d_loadMap_switch_title'),
+      message: t('amr2d_loadMap_switch_confirm', { from: current, to: mapId.value }),
+      cancel: { label: t('cancel'), flat: true, color: 'secondary' },
+      ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
+      persistent: true
+    }).onOk(() => applyLoad(mapId.value))
+    return
+  }
+  if (hasLoadedMap() && !current && mapId.value) {
+    // 有栅格但无名字记录时也二次确认
+    $q.dialog({
+      title: t('amr2d_loadMap_switch_title'),
+      message: t('amr2d_loadMap_switch_confirm_anon', { to: mapId.value }),
+      cancel: { label: t('cancel'), flat: true, color: 'secondary' },
+      ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
+      persistent: true
+    }).onOk(() => applyLoad(mapId.value))
+    return
+  }
+  applyLoad(mapId.value)
 }
 
 </script>
@@ -104,26 +121,22 @@ function selectMap () {
     <q-card>
       <q-card-section class="text-h6" style="min-width: 20rem">
         <div>{{ $t('amr2d_loadMap') }}</div>
+        <div v-if="loadedMapName" class="text-caption text-grey-7 text-weight-regular">
+          {{ $t('amr2d_loadMap_current', { name: loadedMapName }) }}
+        </div>
       </q-card-section>
       <q-separator/>
       <q-card-section v-if="loading" class="text-subtitle1 text-grey-7">
         {{ $t('amr2d_loadMap_loading') }}
       </q-card-section>
-      <q-card-section v-else-if="maps.length === 0" class="text-subtitle1 text-grey-7">
-        <div class="text-bold">{{$t('amr2d_loadMap_empty')}}</div>
+      <q-card-section v-else-if="maps.length === 0" class="text-subtitle1 text-grey-7 text-bold">
+        {{ $t('amr2d_loadMap_empty') }}
         <div class="text-caption q-mt-sm text-weight-regular">
-          {{$t('amr2d_loadMap_hint')}}
+          {{ $t('amr2d_loadMap_hint') }}
         </div>
-        <q-input
-          class="q-mt-md"
-          dense
-          outlined
-          v-model="manualName"
-          :label="$t('amr2d_loadMap_manual')"
-          placeholder="v1"
-        />
       </q-card-section>
       <q-card-section v-else>
+        <div class="text-body2 text-grey-8 q-mb-sm">{{ $t('amr2d_loadMap_description') }}</div>
         <q-option-group
           :options="maps"
           type="radio"
@@ -136,7 +149,7 @@ function selectMap () {
         <q-btn
           color="primary"
           flat
-          :disable="loading || (maps.length > 0 && !mapId) || (maps.length === 0 && !manualName.trim())"
+          :disable="loading || maps.length === 0 || !mapId"
           @click="selectMap"
           :label="$t('ok')"
           class="text-bold"

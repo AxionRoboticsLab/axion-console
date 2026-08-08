@@ -10,6 +10,7 @@ const publish = inject('publish')
 const mapState = inject('mapState')
 const mapBoardVisible = inject('mapBoardVisible', null)
 const keepMapOnIdle = inject('keepMapOnIdle', null)
+const loadedMapName = inject('loadedMapName', null)
 
 let lastSent = { cmd: '', t: 0 }
 const MAP_NAME_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/
@@ -25,12 +26,14 @@ function mapCommand (command) {
   // /map_state 经 rosbridge 可能丢包；本地立即切 UI
   if (command === 'start') {
     if (keepMapOnIdle) keepMapOnIdle.value = false
+    if (loadedMapName) loadedMapName.value = ''
     mapState.value = 'mapping'
     if (mapBoardVisible) mapBoardVisible.value = true
   } else if (command.startsWith('save ')) {
     // 后端 save 成功后会发 idle；本地先退出建图，避免「点了没反应」
     if (keepMapOnIdle) keepMapOnIdle.value = false
     if (mapBoardVisible) mapBoardVisible.value = false
+    if (loadedMapName) loadedMapName.value = ''
     mapState.value = 'idle'
     Notify.create({ type: 'positive', message: t('amr2d_saveMap_done') })
   }
