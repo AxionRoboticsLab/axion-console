@@ -331,11 +331,33 @@ export default function () {
       }
     }
 
+    const w = data.info.width
+    const h = data.info.height
+    const previousMap = mapRender.map
+    const sameSize = previousMap &&
+      mapRender.mapInfo?.width === w &&
+      mapRender.mapInfo?.height === h &&
+      previousMap.texture?.source
+
+    // 同尺寸只更新像素，避免 2Hz 销毁重建导致青/白背景闪烁
+    if (sameSize) {
+      const source = previousMap.texture.source
+      const buf = source.resource
+      if (buf instanceof Uint8Array && buf.length === texturePixels.length) {
+        buf.set(texturePixels)
+      } else {
+        source.resource = texturePixels
+      }
+      source.update?.()
+      mapRender.mapInfo = data.info
+      return
+    }
+
     const texture = new Texture({
       source: new BufferImageSource({
         resource: texturePixels,
-        width: data.info.width,
-        height: data.info.height,
+        width: w,
+        height: h,
         format: 'rgba8unorm'
       })
     })
@@ -352,7 +374,6 @@ export default function () {
     map.y -= data.info.origin.position.y
 
     mapRender.mapInfo = data.info
-    const previousMap = mapRender.map
     mapRender.map = map
 
     if (!previousMap) {
@@ -572,14 +593,46 @@ export default function () {
       mapRender.canvas.offsetHeight / H
     )
 
+    mapRender.rebuildGridOverlay()
     mapRender.app.stage.removeChildren()
     if (mapRender.map) {
       mapRender.app.stage.addChild(mapRender.map)
+    }
+    if (mapRender.gridOverlay) {
+      mapRender.app.stage.addChild(mapRender.gridOverlay)
     }
     mapRender.app.stage.addChild(mapRender.poseContainer || new Container())
     if (mapRender.robot) {
       mapRender.app.stage.addChild(mapRender.robot)
     }
+  }
+
+  /** 世界坐标浅色格网（旧地图没有格线像素时也能看见栅格） */
+  mapRender.rebuildGridOverlay = () => {
+    const info = mapRender.mapInfo
+    if (!info) {
+      mapRender.gridOverlay = null
+      return
+    }
+    const g = new Graphics()
+    const minX = info.origin.position.x
+    const minY = info.origin.position.y
+    const maxX = minX + info.width * info.resolution
+    const maxY = minY + info.height * info.resolution
+    const step = Math.max(info.resolution * 10, 0.5)
+    const color = 0x90a4ae
+    const stroke = { width: Math.max(info.resolution * 0.4, 0.02), color, alpha: 0.65 }
+    for (let x = minX; x <= maxX + 1e-6; x += step) {
+      g.moveTo(x, -minY)
+      g.lineTo(x, -maxY)
+      g.stroke(stroke)
+    }
+    for (let y = minY; y <= maxY + 1e-6; y += step) {
+      g.moveTo(minX, -y)
+      g.lineTo(maxX, -y)
+      g.stroke(stroke)
+    }
+    mapRender.gridOverlay = g
   }
 
   /**
@@ -608,12 +661,14 @@ export default function () {
     }
     mapRender.map = null
     mapRender.mapInfo = null
+    mapRender.gridOverlay = null
     if (mapRender.robot?.parent) {
       mapRender.robot.parent.removeChild(mapRender.robot)
     }
     mapRender.robot = null
     mapRender.pose = null
     if (mapRender.app?.stage) {
+      mapRender.app.stage.removeChildren()
       mapRender.app.stage.x = 0
       mapRender.app.stage.y = 0
     }
