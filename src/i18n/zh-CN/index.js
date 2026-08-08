@@ -195,6 +195,10 @@ export default {
   amr2d_loadMap: '加载地图',
   amr2d_loadMap_description: '请选择要加载的地图',
   amr2d_loadMap_empty: '当前没有地图文件',
+  amr2d_loadMap_loading: '正在查询地图列表…',
+  amr2d_loadMap_failed: '获取地图列表失败（服务超时或 rosbridge 未就绪）',
+  amr2d_loadMap_hint: '地图保存在运行 axion-slam 的机器上：~/data/maps/{名字}_2dmap.pgm/.yaml',
+  amr2d_loadMap_done: '已请求加载地图',
 
   mapPose: '导航点',
   mapPose_title: '导航点列表',

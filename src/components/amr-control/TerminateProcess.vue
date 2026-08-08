@@ -8,6 +8,7 @@ const $q = useQuasar()
 const { t } = useI18n()
 const rosClient = inject('rosClient')
 const mapState = inject('mapState')
+const keepMapOnIdle = inject('keepMapOnIdle', null)
 
 const stopLabel = computed(() =>
   mapState.value === 'mapping' ? t('cancel') : t('amr2d_stop_process')
@@ -22,6 +23,7 @@ function stopProcess () {
     ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
     persistent: true
   }).onOk(() => {
+    if (keepMapOnIdle) keepMapOnIdle.value = false
     rosClient.publish('/map_command', { data: 'stop' })
     mapState.value = 'terminating'
     // 随后后端会到 idle；本地先清板，避免残留建图画面

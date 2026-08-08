@@ -20,6 +20,9 @@ const controlParam = useControlParams()
 /** 是否允许把 /map 画到画布上（只有开始建图或载入后） */
 const mapBoardVisible = ref(false)
 provide('mapBoardVisible', mapBoardVisible)
+/** 载入地图后 state 仍是 idle，避免被 idle 监听清空栅格 */
+const keepMapOnIdle = ref(false)
+provide('keepMapOnIdle', keepMapOnIdle)
 
 watch(connected, value => {
   if (value) {
@@ -105,6 +108,7 @@ onUnmounted(() => {
 
 watch(mapState, value => {
   if (value === 'mapping') {
+    keepMapOnIdle.value = false
     mapBoardVisible.value = true
     resetTeleopPose()
     // 箭头默认落在画板几何中心
@@ -117,10 +121,15 @@ watch(mapState, value => {
     mapManager.placeRobotAtMapCenter?.()
     mapManager.centerOnMap?.()
   } else if (value === 'idle') {
+    if (keepMapOnIdle.value) {
+      mapBoardVisible.value = true
+      return
+    }
     mapBoardVisible.value = false
     mapManager.clearMap?.()
     resetTeleopPose()
   } else if (value === 'terminating') {
+    keepMapOnIdle.value = false
     resetTeleopPose()
   }
 })

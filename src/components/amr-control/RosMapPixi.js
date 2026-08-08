@@ -1,6 +1,6 @@
 import { getCssVar } from 'quasar'
 import { useControlParams } from 'stores/control-params'
-import { Application, Sprite, Container, Texture, Graphics, Assets } from 'pixi.js'
+import { Application, Sprite, Container, Texture, Graphics, Assets, BufferImageSource } from 'pixi.js'
 
 const controlParam = useControlParams()
 
@@ -293,20 +293,51 @@ export default function () {
    * @param data OccupancyGrid格式的地图
    */
   mapRender.processMapRaw = (data) => {
-    const texturePixels = new Uint8Array(data.data.map(x => {
-      switch (x) {
-        case -1: return [0, 0, 0, 10]
-        default: {
-          const grayScale = (100 - x) / 100 * 255
-          return [grayScale, grayScale, grayScale, 255]
-        }
-      }
-    }).flat())
+    const cells = Array.from(data.data || [], raw => {
+      let x = Number(raw)
+      // rosbridge 常把 int8(-1) 编成 255
+      if (x > 100) x = -1
+      return x
+    })
+    // 旧版 PGM 极性错误时整图几乎全是 100：自动翻转，避免「加载后一片黑」
+    let occ = 0
+    let free = 0
+    for (const x of cells) {
+      if (x >= 100) occ += 1
+      else if (x === 0) free += 1
+    }
+    const invert = cells.length > 0 && occ > free && occ / cells.length > 0.55
+    if (invert) {
+      console.warn('[RosMapPixi] occupancy looks inverted; flipping for display')
+    }
 
-    const texture = Texture.from({
-      resource: texturePixels,
-      width: data.info.width,
-      height: data.info.height
+    const texturePixels = new Uint8Array(cells.length * 4)
+    for (let i = 0; i < cells.length; i++) {
+      let x = cells[i]
+      if (invert && x >= 0) x = 100 - x
+      const o = i * 4
+      if (x < 0) {
+        // 未知：深灰可见，不再几乎透明黑
+        texturePixels[o] = 48
+        texturePixels[o + 1] = 48
+        texturePixels[o + 2] = 48
+        texturePixels[o + 3] = 255
+      } else {
+        const grayScale = Math.max(0, Math.min(255, ((100 - x) / 100) * 255))
+        texturePixels[o] = grayScale
+        texturePixels[o + 1] = grayScale
+        texturePixels[o + 2] = grayScale
+        texturePixels[o + 3] = 255
+      }
+    }
+
+    const texture = new Texture({
+      source: new BufferImageSource({
+        resource: texturePixels,
+        width: data.info.width,
+        height: data.info.height,
+        format: 'rgba8unorm'
+      })
     })
 
     const map = new Sprite(texture)

@@ -178,17 +178,31 @@ export default function RosClient () {
   rosClient.wsSend = wsSend
 
   const serviceRsMap = new Map()
-  rosClient.call = async (service, args) => {
+  function resolveServiceType (service, type) {
+    if (type) return type
+    if (service === '/get_map_files') {
+      return isRos2() ? 'std_srvs/srv/Trigger' : 'std_srvs/Trigger'
+    }
+    return undefined
+  }
+  rosClient.call = async (service, args, options = {}) => {
     const id = uuidv4()
+    const timeoutMs = options.timeoutMs ?? 8000
     const rosObj = {
       op: 'call_service',
       id,
       service,
       args: args === '' || args === undefined ? {} : args
     }
+    const resolvedType = resolveServiceType(service, options.type)
+    if (resolvedType) rosObj.type = resolvedType
     wsSend(rosObj)
 
+    const started = Date.now()
     while (!serviceRsMap.has(id)) {
+      if (Date.now() - started > timeoutMs) {
+        throw new Error(`service timeout: ${service}`)
+      }
       await new Promise(resolve => setTimeout(resolve, 100))
     }
 
