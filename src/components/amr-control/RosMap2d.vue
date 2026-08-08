@@ -1,6 +1,6 @@
 <script setup>
 
-import { inject, provide, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, provide, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import RosMapPixi from 'components/amr-control/RosMapPixi'
 import RobotRelocate from 'components/amr-control/RobotRelocate.vue'
@@ -11,6 +11,19 @@ import { useControlParams } from 'stores/control-params'
 import { useVisualization } from 'stores/visualization'
 import TerminateProcess from 'components/amr-control/TerminateProcess.vue'
 
+const props = defineProps({
+  /** 'mapping' 建图页 | 'navigation' 导航页 */
+  workspace: {
+    type: String,
+    default: 'mapping',
+    validator: (v) => ['mapping', 'navigation'].includes(v)
+  }
+})
+
+const isMappingWorkspace = computed(() => props.workspace === 'mapping')
+const isNavigationWorkspace = computed(() => props.workspace === 'navigation')
+provide('workspace', computed(() => props.workspace))
+
 const rosClient = inject('rosClient')
 const connected = inject('connected')
 const mapState = inject('mapState')
@@ -18,10 +31,10 @@ const visualization = useVisualization()
 const controlParam = useControlParams()
 
 /** 是否允许把 /map 画到画布上（只有开始建图或载入后） */
-const mapBoardVisible = ref(false)
+const mapBoardVisible = ref(props.workspace === 'navigation')
 provide('mapBoardVisible', mapBoardVisible)
 /** 载入地图后 state 仍是 idle，避免被 idle 监听清空栅格 */
-const keepMapOnIdle = ref(false)
+const keepMapOnIdle = ref(props.workspace === 'navigation')
 provide('keepMapOnIdle', keepMapOnIdle)
 
 watch(connected, value => {
@@ -71,7 +84,9 @@ onMounted(() => {
 
   teleopLastMs = performance.now()
   teleopTimer = setInterval(() => {
-    if (!teleop || pageMode.value === 'navigation') return
+    // 建图页：本地积分驱动箭头；导航页交给 /robot_pose（后续接定位）
+    if (!isMappingWorkspace.value) return
+    if (!teleop || toolMode.value === 'navigation') return
     if (!mapBoardVisible.value) return
     const now = performance.now()
     const dt = Math.min(0.1, (now - teleopLastMs) / 1000)
@@ -108,6 +123,7 @@ onUnmounted(() => {
 
 watch(mapState, value => {
   if (value === 'mapping') {
+    if (isNavigationWorkspace.value) return
     keepMapOnIdle.value = false
     mapBoardVisible.value = true
     resetTeleopPose()
@@ -121,7 +137,7 @@ watch(mapState, value => {
     mapManager.placeRobotAtMapCenter?.()
     mapManager.centerOnMap?.()
   } else if (value === 'idle') {
-    if (keepMapOnIdle.value) {
+    if (keepMapOnIdle.value || isNavigationWorkspace.value) {
       mapBoardVisible.value = true
       return
     }
@@ -134,42 +150,56 @@ watch(mapState, value => {
   }
 })
 
-const pageMode = ref('default')
-provide('pageMode', pageMode)
+/** 工具子模式：default | navigation（设点/重定位，兼容 RobotRelocate） | mapPose */
+const toolMode = ref('default')
+provide('pageMode', toolMode)
 
 const focusing = ref(mapManager.focusing)
 const robotRelocate = ref()
+
+function toggleNavTool () {
+  toolMode.value = toolMode.value === 'navigation' ? 'default' : 'navigation'
+}
 
 </script>
 
 <template>
   <div class="amr-toolbar">
     <div class="no-wrap flex q-gutter-x-sm justify-center items-center q-pa-sm">
-      <template v-if="pageMode !== 'navigation'">
+      <template v-if="toolMode !== 'navigation'">
         <q-btn key="no-focus" no-wrap v-if="focusing" rounded outline :label="$t('amr2d_no_focus')"
                @click="mapManager.focusing = false; focusing = false" color="negative" icon="navigation"/>
         <q-btn key="focusing" no-wrap v-else rounded :label="$t('amr2d_focus')"
                @click="mapManager.focusing = true; focusing = true" color="primary" icon="navigation"/>
       </template>
 
-      <q-btn key="navigation" no-wrap v-if="!controlParam.requireMapState || mapState === 'navigation' && pageMode !== 'mapPose'" rounded
-             :label="pageMode === 'navigation'?$t('ok'):$t('amr2d_navigation_relocate')" color="primary"
-             icon="label_important_outline"
-             @click="pageMode === 'navigation'?(pageMode = 'default'):(pageMode='navigation')"/>
-      <q-btn key="navigation-cancel" no-wrap v-if="pageMode==='navigation'" :label="$t('cancel')" rounded color="secondary"
-             @click="robotRelocate.cancel()"/>
-      <map-create v-if="pageMode === 'default'" key="map-create"/>
-      <map-selector v-if="pageMode === 'default' && mapState === 'idle'" key="map-selector"/>
-      <terminate-process v-if="pageMode === 'default'" key="terminate-process"/>
-      <q-btn key="map-pose" no-wrap v-if="mapState === 'navigation'  && pageMode !== 'navigation'" rounded
-             :label="$t('mapPose')" color="accent"
-             :outline="pageMode === 'mapPose'" icon="grain"
-             @click="pageMode === 'mapPose'?(pageMode = 'default'):(pageMode='mapPose')"/>
+      <!-- 建图页：创建 / 保存 / 加载 / 取消 -->
+      <template v-if="isMappingWorkspace">
+        <map-create v-if="toolMode === 'default'" key="map-create"/>
+        <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
+        <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
+      </template>
+
+      <!-- 导航页：加载地图 / 重定位与单点目标 / 导航点（后续接 Nav2） -->
+      <template v-else>
+        <map-selector v-if="toolMode === 'default'" key="nav-map-selector"/>
+        <q-btn key="nav-goal" no-wrap rounded
+               :label="toolMode === 'navigation' ? $t('ok') : $t('amr2d_navigation_relocate')"
+               color="primary"
+               icon="label_important_outline"
+               @click="toggleNavTool"/>
+        <q-btn key="nav-goal-cancel" no-wrap v-if="toolMode === 'navigation'" :label="$t('cancel')" rounded color="secondary"
+               @click="robotRelocate.cancel()"/>
+        <q-btn key="map-pose" no-wrap v-if="toolMode !== 'navigation'" rounded
+               :label="$t('mapPose')" color="accent"
+               :outline="toolMode === 'mapPose'" icon="grain"
+               @click="toolMode = toolMode === 'mapPose' ? 'default' : 'mapPose'"/>
+      </template>
     </div>
   </div>
   <canvas ref="pixiContainer" class="map-canvas"/>
-  <RobotRelocate ref="robotRelocate"/>
-  <pose-manager/>
+  <RobotRelocate v-if="isNavigationWorkspace" ref="robotRelocate"/>
+  <pose-manager v-if="isNavigationWorkspace && toolMode === 'mapPose'"/>
 </template>
 
 <style scoped>

@@ -19,6 +19,7 @@ const routes = [
       // ---- Robot ----
       { path: 'robot', redirect: '/robot/amr' },
       { path: 'robot/amr', name: 'robot_amr', component: () => import('pages/robot/amr.vue') },
+      { path: 'robot/navigation', name: 'robot_navigation', component: () => import('pages/robot/navigation.vue') },
       { path: 'robot/joystick', name: 'robot_joystick', component: () => import('pages/robot/joystick.vue') },
       { path: 'robot/service', name: 'robot_service', component: () => import('pages/robot/service.vue') },
       { path: 'robot/param', name: 'robot_param', component: () => import('pages/robot/param.vue') },

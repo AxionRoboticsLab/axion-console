@@ -150,8 +150,10 @@ export default {
 
   router_setting: '连接设置',
   router_setting_description: 'ROS / 机器人连接参数',
-  router_amr_2d: '2D 控制台',
-  router_amr_2d_description: '地图与导航控制',
+  router_amr_2d: '2D建图',
+  router_amr_2d_description: '创建、保存与加载 2D 地图',
+  router_amr_nav: '导航',
+  router_amr_nav_description: '载图、重定位与 Nav2 单点导航',
   router_service: 'ROS 服务',
   router_service_description: '服务调用调试',
   router_joystick: '虚拟手柄',

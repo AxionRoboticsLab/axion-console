@@ -150,8 +150,10 @@ export default {
 
   router_setting: 'Connection Settings',
   router_setting_description: 'ROS / robot connection',
-  router_amr_2d: '2D Console',
-  router_amr_2d_description: 'Map and navigation control',
+  router_amr_2d: '2D Mapping',
+  router_amr_2d_description: 'Create, save and load 2D maps',
+  router_amr_nav: 'Navigation',
+  router_amr_nav_description: 'Load map, relocate and Nav2 goal navigation',
   router_service: 'ROS Service',
   router_service_description: 'Call ROS services',
   router_joystick: 'Joystick',
