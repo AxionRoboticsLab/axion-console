@@ -36,7 +36,9 @@ export default function RosClient () {
 
   function resolveType (topic, type) {
     if (type) return type
-    if (topic === '/map_command' || topic === '/map_state') return stringType()
+    if (topic === '/map_command' || topic === '/map_state' || topic === '/map_file_list') {
+      return stringType()
+    }
     if (topic === controlParams.cmdTopic) {
       return isRos2() ? 'geometry_msgs/msg/Twist' : 'geometry_msgs/Twist'
     }
@@ -129,6 +131,8 @@ export default function RosClient () {
   const trajectoryTopic = visualization.trajectoryTopic
   const costMapTopic = visualization.costMapTopic
 
+  const mapListWaiters = []
+
   function processTopic (rosObject) {
     switch (rosObject.topic) {
       case '/robot_pose':rosClient.robotPose.value = rosObject.msg; break
@@ -139,6 +143,14 @@ export default function RosClient () {
       case trajectoryTopic: rosClient.loadTrajectory.value(rosObject.msg); break
       case costMapTopic: rosClient.loadCostMap.value(rosObject.msg); break
       case '/map_state': rosClient.mapState.value = rosObject.msg.data; break
+      case '/map_file_list': {
+        const text = rosObject.msg?.data ?? ''
+        while (mapListWaiters.length) {
+          const resolve = mapListWaiters.shift()
+          try { resolve(text) } catch (e) { /* ignore */ }
+        }
+        break
+      }
     }
   }
 
@@ -209,6 +221,37 @@ export default function RosClient () {
     const result = serviceRsMap.get(id)
     serviceRsMap.delete(id)
     return result
+  }
+
+  /**
+   * 拉取地图列表：优先话题（map_command list → /map_file_list），
+   * rosbridge 上 call_service 常超时，故不作为主路径。
+   */
+  rosClient.requestMapList = async (timeoutMs = 5000) => {
+    if (!connected.value) {
+      throw new Error('ros not connected')
+    }
+    rosClient.subscribe('/map_file_list')
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const finish = (fn, value) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        const idx = mapListWaiters.indexOf(onData)
+        if (idx >= 0) mapListWaiters.splice(idx, 1)
+        fn(value)
+      }
+      const onData = (text) => finish(resolve, String(text || ''))
+      const timer = setTimeout(() => {
+        finish(reject, new Error('map list timeout via /map_file_list'))
+      }, timeoutMs)
+      mapListWaiters.push(onData)
+      // 略延迟，确保 subscribe 先到达 rosbridge
+      setTimeout(() => {
+        rosClient.publish('/map_command', { data: 'list' })
+      }, 80)
+    })
   }
 
   rosClient.getParams = async (nodeName, params) => {

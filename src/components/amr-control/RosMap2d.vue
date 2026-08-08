@@ -42,6 +42,7 @@ watch(connected, value => {
     rosClient.subscribe(controlParam.mapTopic)
     rosClient.subscribe('/robot_pose')
     rosClient.subscribe('/map_state')
+    rosClient.subscribe('/map_file_list')
     rosClient.advertise('/map_command')
     if (visualization.pathEnable) rosClient.subscribe(visualization.pathTopic)
     if (visualization.laserScanEnable) rosClient.subscribe(visualization.laserScanTopic)

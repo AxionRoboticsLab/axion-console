@@ -198,8 +198,9 @@ export default {
   amr2d_loadMap_description: 'Please choose a map',
   amr2d_loadMap_empty: 'There has no map file',
   amr2d_loadMap_loading: 'Fetching map list…',
-  amr2d_loadMap_failed: 'Failed to list maps (service timeout or rosbridge not ready)',
+  amr2d_loadMap_failed: 'Could not auto-list maps (enter name manually below, e.g. v1)',
   amr2d_loadMap_hint: 'Maps are stored on the axion-slam host: ~/data/maps/{name}_2dmap.pgm/.yaml',
+  amr2d_loadMap_manual: 'Enter map name manually',
   amr2d_loadMap_done: 'Load map requested',
 
   mapPose: 'Map Pose',

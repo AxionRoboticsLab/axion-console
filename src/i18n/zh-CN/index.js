@@ -198,8 +198,9 @@ export default {
   amr2d_loadMap_description: '请选择要加载的地图',
   amr2d_loadMap_empty: '当前没有地图文件',
   amr2d_loadMap_loading: '正在查询地图列表…',
-  amr2d_loadMap_failed: '获取地图列表失败（服务超时或 rosbridge 未就绪）',
+  amr2d_loadMap_failed: '未能自动列出地图（可用下方手动输入名字，如 v1）',
   amr2d_loadMap_hint: '地图保存在运行 axion-slam 的机器上：~/data/maps/{名字}_2dmap.pgm/.yaml',
+  amr2d_loadMap_manual: '手动输入地图名',
   amr2d_loadMap_done: '已请求加载地图',
 
   mapPose: '导航点',
