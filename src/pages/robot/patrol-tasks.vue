@@ -12,13 +12,12 @@
     <q-separator/>
 
     <q-tab-panels v-model="tab" animated class="col column bg-transparent q-pt-md">
-      <!-- 任务列表 -->
       <q-tab-panel name="list" class="q-pa-none column col">
         <AppDataTable
           row-key="id"
           :rows="taskRows"
           :columns="taskColumns"
-          :loading="false"
+          :loading="pointsLoading"
           :pagination="taskPagination"
           @request="onTaskRequest"
         >
@@ -30,11 +29,7 @@
               <q-chip
                 v-for="name in props.row.pointNames"
                 :key="name"
-                dense
-                size="sm"
-                color="teal-1"
-                text-color="teal-10"
-                class="q-mr-xs"
+                dense size="sm" color="teal-1" text-color="teal-10" class="q-mr-xs"
               >
                 {{ name }}
               </q-chip>
@@ -50,7 +45,6 @@
         </AppDataTable>
       </q-tab-panel>
 
-      <!-- 任务结果 -->
       <q-tab-panel name="results" class="q-pa-none column col">
         <q-card flat class="app-filter-card q-mb-md q-pa-md">
           <div class="row q-col-gutter-md items-end">
@@ -148,7 +142,7 @@
           {{ editingId ? t('patrol_task_edit') : t('patrol_task_create') }}
         </q-card-section>
         <q-card-section class="q-gutter-md">
-          <q-input v-model="form.name" outlined dense :label="t('patrol_task_name')" :rules="[v => !!v || t('patrol_task_name_required')]"/>
+          <q-input v-model="form.name" outlined dense :label="t('patrol_task_name')"/>
           <q-select
             v-model="form.type"
             outlined dense emit-value map-options
@@ -159,7 +153,9 @@
             v-model="form.pointIds"
             outlined dense multiple emit-value map-options use-chips
             :options="pointOptions"
+            :loading="pointsLoading"
             :label="t('patrol_task_points')"
+            :hint="activeMapLabel"
           />
         </q-card-section>
         <q-card-actions align="right">
@@ -172,24 +168,35 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { Notify, useQuasar } from 'quasar'
 import AppDataTable from 'components/common/AppDataTable.vue'
+import { listMaps, listPatrolPoints } from 'src/api/maps'
+import { usePatrolMission } from 'stores/patrol-mission'
 
 defineOptions({ name: 'PatrolTasksPage' })
 
 const { t } = useI18n()
 const $q = useQuasar()
+const router = useRouter()
+const mission = usePatrolMission()
 const tab = ref('list')
 
-/** 模板点位（后续对接 edge-agent 巡检点） */
-const pointOptions = [
-  { label: 'NorthGate', value: 1 },
-  { label: 'WestGate', value: 2 },
-  { label: 'SouthHall', value: 3 },
-  { label: 'ChargeDock', value: 4 }
-]
+const pointCatalog = ref([])
+const activeMapId = ref(null)
+const activeMapName = ref('')
+const pointsLoading = ref(false)
+
+const pointOptions = computed(() =>
+  pointCatalog.value.map((p) => ({ label: p.name, value: p.id }))
+)
+
+const activeMapLabel = computed(() => {
+  if (!activeMapName.value) return t('patrol_need_map')
+  return t('amr2d_loadMap_current', { name: activeMapName.value })
+})
 
 const typeOptions = computed(() => [
   { label: t('patrol_task_type_once'), value: 'once' },
@@ -208,40 +215,11 @@ const resultOptions = computed(() => [
   { label: t('patrol_task_result_fail'), value: 'fail' }
 ])
 
-const tasks = ref([
-  { id: 1, name: '晨间巡检', type: 'once', pointIds: [1, 2] },
-  { id: 2, name: '周界循环', type: 'loop', pointIds: [1, 2, 3] }
-])
+const tasks = ref([])
+const runs = ref([])
 
-const runs = ref([
-  {
-    id: 101,
-    name: '晨间巡检',
-    status: 'done',
-    result: 'success',
-    startedAt: '2026-08-09 08:00:12',
-    endedAt: '2026-08-09 08:18:45'
-  },
-  {
-    id: 102,
-    name: '周界循环',
-    status: 'running',
-    result: null,
-    startedAt: '2026-08-09 13:40:00',
-    endedAt: null
-  },
-  {
-    id: 103,
-    name: '夜班抽检',
-    status: 'waiting',
-    result: null,
-    startedAt: '2026-08-09 22:00:00',
-    endedAt: null
-  }
-])
-
-const taskPagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 2 })
-const resultPagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 3 })
+const taskPagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
+const resultPagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
 
 const taskColumns = computed(() => [
   { name: 'name', label: t('patrol_task_name'), field: 'name', align: 'left' },
@@ -259,7 +237,7 @@ const resultColumns = computed(() => [
 ])
 
 function pointNamesOf (ids) {
-  return (ids || []).map((id) => pointOptions.find((p) => p.value === id)?.label || String(id))
+  return (ids || []).map((id) => pointCatalog.value.find((p) => p.id === id)?.name || String(id))
 }
 
 const taskRows = computed(() =>
@@ -304,16 +282,45 @@ function onResultRequest (req) {
   resultPagination.value = { ...resultPagination.value, ...req.pagination, rowsNumber: filteredResults.value.length }
 }
 
+async function loadPointCatalog () {
+  pointsLoading.value = true
+  try {
+    const maps = await listMaps()
+    const active = (maps || []).find((m) => m.status === 1) || (maps || [])[0]
+    if (!active) {
+      pointCatalog.value = []
+      activeMapId.value = null
+      activeMapName.value = ''
+      return
+    }
+    activeMapId.value = active.id
+    activeMapName.value = active.map_name
+    const rows = await listPatrolPoints(active.id)
+    pointCatalog.value = rows || []
+  } catch (e) {
+    console.warn('[patrol-tasks] load points failed', e)
+    Notify.create({ type: 'warning', message: e.message || t('patrol_empty') })
+  } finally {
+    pointsLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadPointCatalog()
+})
+
 const formOpen = ref(false)
 const editingId = ref(null)
 const form = ref({ name: '', type: 'once', pointIds: [] })
 
-function openCreate () {
+async function openCreate () {
+  await loadPointCatalog()
   editingId.value = null
   form.value = { name: '', type: 'once', pointIds: [] }
   formOpen.value = true
 }
-function openEdit (row) {
+async function openEdit (row) {
+  await loadPointCatalog()
   editingId.value = row.id
   form.value = { name: row.name, type: row.type, pointIds: [...row.pointIds] }
   formOpen.value = true
@@ -329,15 +336,17 @@ function saveTask () {
   }
   if (editingId.value) {
     const row = tasks.value.find((x) => x.id === editingId.value)
-    if (row) Object.assign(row, { ...form.value, name: form.value.name.trim() })
+    if (row) Object.assign(row, { ...form.value, name: form.value.name.trim(), mapId: activeMapId.value })
   } else {
     tasks.value.push({
       id: Date.now(),
       name: form.value.name.trim(),
       type: form.value.type,
-      pointIds: [...form.value.pointIds]
+      pointIds: [...form.value.pointIds],
+      mapId: activeMapId.value
     })
   }
+  taskPagination.value.rowsNumber = tasks.value.length
   formOpen.value = false
   Notify.create({ type: 'info', message: t('patrol_task_template_saved') })
 }
@@ -349,29 +358,57 @@ function removeTask (row) {
     persistent: true
   }).onOk(() => {
     tasks.value = tasks.value.filter((x) => x.id !== row.id)
+    taskPagination.value.rowsNumber = tasks.value.length
     Notify.create({ type: 'info', message: t('patrol_task_template_saved') })
   })
 }
-function executeTask (row) {
+
+async function executeTask (row) {
+  await loadPointCatalog()
+  const points = (row.pointIds || [])
+    .map((id) => pointCatalog.value.find((p) => p.id === id))
+    .filter(Boolean)
+  if (!points.length) {
+    Notify.create({ type: 'warning', message: t('patrol_task_points_required') })
+    return
+  }
+  try {
+    mission.requestExecute({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      points
+    })
+  } catch (e) {
+    Notify.create({ type: 'warning', message: t('patrol_task_points_required') })
+    return
+  }
+
   runs.value.unshift({
-    id: Date.now(),
+    id: mission.runId,
     name: row.name,
     status: 'running',
     result: null,
-    startedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    startedAt: mission.startedAt,
     endedAt: null
   })
-  tab.value = 'results'
-  Notify.create({ type: 'positive', message: t('patrol_task_execute_ok', { name: row.name }) })
+
+  Notify.create({ type: 'positive', message: t('patrol_task_execute_jump', { name: row.name }) })
+  await router.push({ name: 'robot_navigation' })
 }
+
 function pauseRun (row) {
-  if (row.status === 'running') row.status = 'waiting'
+  if (row.status === 'running') {
+    row.status = 'waiting'
+    if (mission.runId === row.id) mission.pause()
+  }
   Notify.create({ type: 'info', message: t('patrol_task_template_action') })
 }
 function cancelRun (row) {
   row.status = 'done'
   row.result = 'fail'
   row.endedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  if (mission.runId === row.id) mission.cancel()
   Notify.create({ type: 'info', message: t('patrol_task_template_action') })
 }
 function searchResults () {

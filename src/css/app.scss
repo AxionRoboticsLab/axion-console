@@ -3,6 +3,14 @@
 :root {
   // Matches Quasar default toolbar / header height
   --app-header-height: 50px;
+  // 提示条在顶栏下方，避免挡住菜单图标
+  --app-notify-top: calc(var(--app-header-height) + 10px);
+}
+
+// 右上角 / 顶部 Notify：从顶栏下方开始向下堆叠
+.q-notifications__list--top {
+  top: var(--app-notify-top) !important;
+  bottom: auto !important;
 }
 
 // Page fills viewport below fixed header (no outer page scroll)

@@ -314,6 +314,9 @@ export default {
   patrol_run_done: 'Patrol finished',
   patrol_run_progress: 'Patrolling {i}/{n}',
   patrol_run_next: 'Going to “{name}” ({i}/{n})',
+  patrol_deploy_hint: 'Deploy/query points here. Run patrols from Patrol Tasks → Execute.',
+  patrol_mission_planned: 'Planned “{name}” ({n} points), starting patrol',
+  patrol_task_execute_jump: 'Opening navigation to run “{name}”',
 
   joystick_params: 'Joystick Params',
   joystick_linear: 'Linear Speed',

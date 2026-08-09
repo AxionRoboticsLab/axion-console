@@ -580,6 +580,32 @@ export default function () {
     mapRender.removeTarget?.()
   }
 
+  /** 完整巡检路线（当前位置 → 各点排序后折线） */
+  mapRender.drawPatrolTour = (pts) => {
+    if (!mapRender.app) return
+    mapRender.clearPatrolTour()
+    if (!pts || pts.length < 2) return
+    const layer = new Graphics()
+    // 底线：完整巡检路径
+    mapRender.strokePoly(layer, pts, 0x00897B, 0.1, 0.85)
+    // 各拐点小圆
+    for (let i = 1; i < pts.length; i++) {
+      layer.circle(pts[i].x, -pts[i].y, 0.1)
+      layer.fill({ color: 0x00897B, alpha: 0.55 })
+    }
+    mapRender.app.stage.addChild(layer)
+    mapRender.patrolTour = layer
+    if (mapRender.target) mapRender.app.stage.addChild(mapRender.target)
+    if (mapRender.robot) mapRender.app.stage.addChild(mapRender.robot)
+  }
+
+  mapRender.clearPatrolTour = () => {
+    if (mapRender.patrolTour?.parent) {
+      mapRender.patrolTour.parent.removeChild(mapRender.patrolTour)
+    }
+    mapRender.patrolTour = null
+  }
+
   mapRender.processTrajectory = (data) => {
     if (data.poses.length < 2) {
       mapRender.clearTrajectory()

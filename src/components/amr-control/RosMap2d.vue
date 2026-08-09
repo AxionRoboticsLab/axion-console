@@ -8,6 +8,7 @@ import RobotRelocate from 'components/amr-control/RobotRelocate.vue'
 import MapSelector from 'components/amr-control/MapSelector.vue'
 import MapCreate from 'components/amr-control/MapCreate.vue'
 import PoseManager from 'components/map-pose/PoseManager.vue'
+import PatrolMissionRunner from 'components/map-pose/PatrolMissionRunner.vue'
 import { useControlParams } from 'stores/control-params'
 import { useVisualization } from 'stores/visualization'
 import TerminateProcess from 'components/amr-control/TerminateProcess.vue'
@@ -210,6 +211,7 @@ const toolMode = ref('default')
 provide('pageMode', toolMode)
 
 const focusing = ref(mapManager.focusing)
+provide('focusingUi', focusing)
 const robotRelocate = ref()
 const mapEditMode = computed(() => toolMode.value === 'relocate' || toolMode.value === 'goto')
 
@@ -310,6 +312,7 @@ const isAutoNav = computed(() => navMode.value === 'auto')
   />
   <RobotRelocate v-if="isNavigationWorkspace" ref="robotRelocate"/>
   <pose-manager v-if="isNavigationWorkspace && toolMode === 'patrol'"/>
+  <patrol-mission-runner v-if="isNavigationWorkspace"/>
 </template>
 
 <style scoped>

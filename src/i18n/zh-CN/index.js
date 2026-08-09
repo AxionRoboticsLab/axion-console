@@ -314,6 +314,9 @@ export default {
   patrol_run_done: '巡检完成',
   patrol_run_progress: '巡检中 {i}/{n}',
   patrol_run_next: '前往「{name}」（{i}/{n}）',
+  patrol_deploy_hint: '此处仅部署/查询点位。执行巡检请到「巡检任务」点执行。',
+  patrol_mission_planned: '已规划「{name}」最优顺序（{n} 点），开始巡检',
+  patrol_task_execute_jump: '正在跳转导航并执行「{name}」',
 
   joystick_params: '手柄遥控参数',
   joystick_linear: '线性移动速度',

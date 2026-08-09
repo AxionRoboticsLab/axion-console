@@ -1,6 +1,7 @@
 <script setup>
 /**
- * 巡检点：edge-agent REST；新增取当前位姿；点击发 /goal_pose；可按列表顺序连跑
+ * 导航页巡检点：查询 / 部署（添加、改名、删除）；单击发单点导航。
+ * 「开始巡检」已移至「巡检任务 → 执行」。
  */
 import {
   createPatrolPoint,
@@ -22,7 +23,6 @@ const publish = inject('publish')
 const loadedMapName = inject('loadedMapName', null)
 const loadedMapId = inject('loadedMapId', null)
 const navMode = inject('navMode', ref('auto'))
-const navState = inject('navState', ref('idle'))
 
 function stampHeader () {
   const now = Date.now()
@@ -62,15 +62,11 @@ function publishGoalPose (pose) {
   })
 }
 
-/** 由父级 v-if 控制挂载；弹框始终打开 */
 const dialogOpen = ref(true)
 const poseList = ref([])
 const selected = ref(null)
 const loading = ref(false)
 const nameFilter = ref('')
-const patrolQueue = ref([])
-const patrolRunning = ref(false)
-const patrolIndex = ref(-1)
 
 const filteredList = computed(() => {
   const q = (nameFilter.value || '').trim().toLowerCase()
@@ -144,12 +140,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  stopPatrol(false)
   mapManager?.loadPoseList?.([])
 })
 
 watch(() => loadedMapId?.value, () => {
-  stopPatrol(false)
   reloadPoses()
 })
 
@@ -205,90 +199,23 @@ async function addPose () {
   }
 }
 
-function sendToPoint (item, { notify = true } = {}) {
-  selected.value = item.id
-  mapManager?.changePoseColor?.(item.id)
-  if (!item?.pose) return
-  mapManager?.updateTargetPose?.(item.pose)
-  try {
-    publishGoalPose(item.pose)
-    if (notify) {
-      Notify.create({ type: 'positive', message: t('nav_goto_done') })
-    }
-  } catch (e) {
-    Notify.create({ type: 'negative', message: t('nav_publish_failed') })
-  }
-}
-
 function choose (item) {
   if (navMode?.value === 'manual') {
     Notify.create({ type: 'warning', message: t('nav_mode_auto_required') })
     return
   }
-  if (patrolRunning.value) {
-    stopPatrol(false)
-  }
-  sendToPoint(item)
-}
-
-function advancePatrol () {
-  if (!patrolRunning.value) return
-  const next = patrolIndex.value + 1
-  if (next >= patrolQueue.value.length) {
-    Notify.create({ type: 'positive', message: t('patrol_run_done') })
-    stopPatrol(false)
-    return
-  }
-  patrolIndex.value = next
-  const item = patrolQueue.value[next]
-  sendToPoint(item, { notify: false })
-  Notify.create({
-    type: 'info',
-    message: t('patrol_run_next', {
-      name: item.name,
-      i: next + 1,
-      n: patrolQueue.value.length
-    })
-  })
-}
-
-function startPatrol () {
-  if (navMode?.value === 'manual') {
-    Notify.create({ type: 'warning', message: t('nav_mode_auto_required') })
-    return
-  }
-  const list = filteredList.value
-  if (!list.length) {
-    Notify.create({ type: 'warning', message: t('patrol_empty') })
-    return
-  }
-  patrolQueue.value = [...list]
-  patrolIndex.value = -1
-  patrolRunning.value = true
-  advancePatrol()
-}
-
-function stopPatrol (notify = true) {
-  const was = patrolRunning.value
-  patrolRunning.value = false
-  patrolQueue.value = []
-  patrolIndex.value = -1
-  if (notify && was) {
-    Notify.create({ type: 'info', message: t('patrol_run_stopped') })
+  selected.value = item.id
+  mapManager?.changePoseColor?.(item.id)
+  if (item?.pose) {
+    mapManager?.updateTargetPose?.(item.pose)
+    try {
+      publishGoalPose(item.pose)
+      Notify.create({ type: 'positive', message: t('nav_goto_done') })
+    } catch (e) {
+      Notify.create({ type: 'negative', message: t('nav_publish_failed') })
+    }
   }
 }
-
-let lastPatrolAdvanceAt = 0
-watch(navState, (state, prev) => {
-  if (!patrolRunning.value) return
-  const hit = state === 'arrived' || (prev === 'navigating' && state === 'idle')
-  if (!hit) return
-  const now = Date.now()
-  // arrived + idle 可能连续到，防双进
-  if (now - lastPatrolAdvanceAt < 400) return
-  lastPatrolAdvanceAt = now
-  setTimeout(() => advancePatrol(), 120)
-})
 
 async function editName (item) {
   const name = await promptName(t('patrol_rename_title'), item.name)
@@ -318,7 +245,6 @@ async function removeSelected () {
 }
 
 function closePanel () {
-  stopPatrol(false)
   if (pageMode) pageMode.value = 'default'
 }
 </script>
@@ -339,11 +265,7 @@ function closePanel () {
           </div>
         </div>
         <q-btn
-          flat
-          dense
-          round
-          icon="sync"
-          color="primary"
+          flat dense round icon="sync" color="primary"
           :loading="loading"
           :aria-label="$t('patrol_reload')"
           @click="reloadPoses"
@@ -355,9 +277,7 @@ function closePanel () {
       <q-card-section class="q-gutter-sm">
         <q-input
           v-model="nameFilter"
-          dense
-          outlined
-          clearable
+          dense outlined clearable
           :label="$t('patrol_filter')"
           :placeholder="$t('patrol_filter_hint')"
         >
@@ -365,36 +285,15 @@ function closePanel () {
             <q-icon name="search"/>
           </template>
         </q-input>
-        <div class="row q-gutter-sm">
-          <q-btn
-            v-if="!patrolRunning"
-            unelevated
-            color="primary"
-            icon="playlist_play"
-            :label="$t('patrol_run')"
-            class="col"
-            @click="startPatrol"
-          />
-          <q-btn
-            v-else
-            unelevated
-            color="warning"
-            icon="stop"
-            :label="$t('patrol_run_stop')"
-            class="col"
-            @click="stopPatrol(true)"
-          />
-        </div>
-        <div v-if="patrolRunning" class="text-caption text-primary">
-          {{ $t('patrol_run_progress', { i: patrolIndex + 1, n: patrolQueue.length }) }}
+        <div class="text-caption text-grey-7">
+          {{ $t('patrol_deploy_hint') }}
         </div>
         <q-inner-loading :showing="loading"/>
-        <q-list v-if="filteredList.length" bordered separator dense style="overflow: auto; max-height: 36vh">
+        <q-list v-if="filteredList.length" bordered separator dense style="overflow: auto; max-height: 40vh">
           <q-item
             v-for="item in filteredList"
             :key="item.id"
-            clickable
-            v-ripple
+            clickable v-ripple
             :active="selected === item.id"
             active-class="bg-teal-5 text-white"
             @click="choose(item)"
@@ -407,11 +306,7 @@ function closePanel () {
             </q-item-section>
             <q-item-section side>
               <q-btn
-                flat
-                dense
-                round
-                size="sm"
-                icon="edit"
+                flat dense round size="sm" icon="edit"
                 :aria-label="$t('patrol_rename_title')"
                 @click.stop="editName(item)"
               />
