@@ -68,6 +68,24 @@ const selected = ref(null)
 const loading = ref(false)
 const nameFilter = ref('')
 
+/** 相对黑框底部 + 20px */
+const actionsStyle = ref({
+  left: '50%',
+  top: 'auto',
+  bottom: '1rem',
+  transform: 'translateX(-50%)'
+})
+
+function syncActionsToFrame (frame) {
+  if (!frame) return
+  actionsStyle.value = {
+    left: `${frame.left + frame.width / 2}px`,
+    top: `${frame.actionsTop}px`,
+    bottom: 'auto',
+    transform: 'translateX(-50%)'
+  }
+}
+
 const filteredList = computed(() => {
   const q = (nameFilter.value || '').trim().toLowerCase()
   if (!q) return poseList.value
@@ -136,10 +154,17 @@ async function reloadPoses () {
 }
 
 onMounted(() => {
+  if (mapManager) {
+    mapManager.onFrameLayout = syncActionsToFrame
+    mapManager.notifyFrameLayout?.()
+  }
   reloadPoses()
 })
 
 onUnmounted(() => {
+  if (mapManager?.onFrameLayout === syncActionsToFrame) {
+    mapManager.onFrameLayout = null
+  }
   mapManager?.loadPoseList?.([])
 })
 
@@ -319,8 +344,8 @@ function closePanel () {
       </q-card-section>
     </q-card>
   </q-dialog>
-  <!-- 叠在画布底部（黑框下方），不落到画布外 -->
-  <div v-if="dialogOpen" class="patrol-canvas-actions">
+  <!-- 黑框下方 20px（位置由 mapManager.onFrameLayout 同步） -->
+  <div v-if="dialogOpen" class="patrol-canvas-actions" :style="actionsStyle">
     <q-btn :label="$t('patrol_add')" icon="add" color="primary" @click="addPose"/>
     <q-btn :label="$t('patrol_remove')" icon="delete" color="negative" outline @click="removeSelected"/>
   </div>
@@ -329,9 +354,6 @@ function closePanel () {
 <style scoped>
 .patrol-canvas-actions {
   position: absolute;
-  left: 50%;
-  bottom: 1rem;
-  transform: translateX(-50%);
   z-index: 25;
   display: flex;
   flex-wrap: wrap;

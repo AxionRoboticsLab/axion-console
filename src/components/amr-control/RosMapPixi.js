@@ -19,41 +19,137 @@ export default function () {
     poseContainer: new Container()
   }
 
-  /** 固定视口（裁剪）+ 可缩放 world；无黑色装饰底 */
+  /** 黑框描边宽度；框下留给操作按钮的空隙与高度 */
+  mapRender.FRAME_BORDER = 3
+  mapRender.BUTTON_GAP = 20
+  mapRender.BUTTON_RESERVE = 52
+  /** 相对 fitScale 的内容缩放（黑框本身不缩放） */
+  mapRender.contentZoom = 1
+
+  /**
+   * 固定黑框（屏幕坐标）+ 框内可缩放 world
+   * frameBg / frameBorder 不随滚轮缩放
+   */
   mapRender.ensureLayers = () => {
     if (!mapRender.app?.stage || mapRender.layersReady) return
     const stage = mapRender.app.stage
     stage.eventMode = 'static'
+    mapRender.frameBg = new Graphics()
     mapRender.worldViewport = new Container()
     mapRender.world = new Container()
     mapRender.viewMask = new Graphics()
+    mapRender.frameBorder = new Graphics()
     mapRender.worldViewport.addChild(mapRender.world)
     mapRender.worldViewport.addChild(mapRender.viewMask)
     mapRender.worldViewport.mask = mapRender.viewMask
+    stage.addChild(mapRender.frameBg)
     stage.addChild(mapRender.worldViewport)
+    stage.addChild(mapRender.frameBorder)
     mapRender.layersReady = true
     mapRender.layoutViewport()
   }
 
-  /** 视口 = 整块画布；放大内容裁切在容器内，不溢出 */
+  /** 黑框尺寸按画布适配后固定；仅框内内容缩放 */
   mapRender.layoutViewport = () => {
     if (!mapRender.app || !mapRender.viewMask) return
-    const w = mapRender.app.screen?.width || mapRender.canvas?.clientWidth || 800
-    const h = mapRender.app.screen?.height || mapRender.canvas?.clientHeight || 600
-    mapRender.boardRect = { x: 0, y: 0, w, h, mapW: w, mapH: h }
-    mapRender.worldViewport.position.set(0, 0)
+    const cw = mapRender.app.screen?.width || mapRender.canvas?.clientWidth || 800
+    const ch = mapRender.app.screen?.height || mapRender.canvas?.clientHeight || 600
+    const pad = 16
+    const bottomReserve = mapRender.BUTTON_GAP + mapRender.BUTTON_RESERVE
+    const availW = Math.max(120, cw - pad * 2)
+    const availH = Math.max(120, ch - pad * 2 - bottomReserve)
+
+    let aspect = 1
+    if (mapRender.mapInfo) {
+      const mw = Math.max(mapRender.mapInfo.width * mapRender.mapInfo.resolution, 1e-6)
+      const mh = Math.max(mapRender.mapInfo.height * mapRender.mapInfo.resolution, 1e-6)
+      aspect = mw / mh
+    }
+
+    let frameW
+    let frameH
+    if (availW / availH > aspect) {
+      frameH = availH
+      frameW = frameH * aspect
+    } else {
+      frameW = availW
+      frameH = frameW / aspect
+    }
+
+    const frameX = (cw - frameW) / 2
+    const frameY = pad + Math.max(0, (availH - frameH) / 2)
+    const border = mapRender.FRAME_BORDER
+    const innerW = Math.max(1, frameW - border * 2)
+    const innerH = Math.max(1, frameH - border * 2)
+
+    mapRender.boardRect = {
+      x: frameX,
+      y: frameY,
+      w: frameW,
+      h: frameH,
+      mapW: innerW,
+      mapH: innerH,
+      innerX: frameX + border,
+      innerY: frameY + border
+    }
+
+    mapRender.worldViewport.position.set(frameX + border, frameY + border)
     mapRender.viewMask.clear()
-    mapRender.viewMask.rect(0, 0, w, h)
+    mapRender.viewMask.rect(0, 0, innerW, innerH)
     mapRender.viewMask.fill({ color: 0xffffff })
+
+    mapRender.frameBg.clear()
+    mapRender.frameBg.rect(frameX + border, frameY + border, innerW, innerH)
+    mapRender.frameBg.fill({ color: 0xffffff })
+
+    mapRender.frameBorder.clear()
+    mapRender.frameBorder.rect(frameX, frameY, frameW, frameH)
+    mapRender.frameBorder.stroke({ width: border, color: 0x111111 })
+
+    mapRender.notifyFrameLayout()
+  }
+
+  mapRender.notifyFrameLayout = () => {
+    const b = mapRender.boardRect
+    if (!b || typeof mapRender.onFrameLayout !== 'function') return
+    mapRender.onFrameLayout({
+      left: b.x,
+      top: b.y,
+      width: b.w,
+      height: b.h,
+      actionsTop: b.y + b.h + mapRender.BUTTON_GAP
+    })
+  }
+
+  mapRender.pointInFrame = (x, y) => {
+    const b = mapRender.boardRect
+    if (!b) return false
+    return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h
   }
 
   /** @deprecated 兼容旧调用 */
   mapRender.layoutBoard = () => mapRender.layoutViewport()
 
+  mapRender.clampContentZoom = (z) => {
+    const minZ = mapRender.minContentZoom || 1
+    const maxZ = mapRender.maxContentZoom || 5
+    return Math.min(maxZ, Math.max(minZ, z))
+  }
+
+  mapRender.applyContentZoom = () => {
+    if (!mapRender.world) return
+    const z = mapRender.clampContentZoom(mapRender.contentZoom || 1)
+    mapRender.contentZoom = z
+    const s = (mapRender.fitScale || 1) * z
+    mapRender.world.scale.set(s, s)
+    mapRender.minScale = (mapRender.fitScale || 1) * (mapRender.minContentZoom || 1)
+    mapRender.maxScale = (mapRender.fitScale || 1) * (mapRender.maxContentZoom || 5)
+  }
+
   mapRender.clampWorldScale = (s) => {
-    const minS = mapRender.minScale || 0.5
-    const maxS = mapRender.maxScale || 8
-    return Math.min(maxS, Math.max(minS, s))
+    const fit = mapRender.fitScale || 1
+    const z = mapRender.clampContentZoom(s / Math.max(fit, 1e-9))
+    return fit * z
   }
 
   mapRender.addToWorld = (child) => {
@@ -136,16 +232,18 @@ export default function () {
     }
   }
 
-  /** 地图中心对准视口中心 */
+  /** 地图中心对准黑框内侧中心（黑框本身不动） */
   mapRender.centerOnMap = () => {
     if (!mapRender.app || !mapRender.canvas || !mapRender.mapInfo || !mapRender.world) {
       return
     }
     mapRender.layoutViewport()
+    mapRender.applyContentZoom()
     const c = mapRender.mapCenter()
     const board = mapRender.boardRect
     const sx = mapRender.world.scale.x
     const sy = mapRender.world.scale.y
+    // world 位于 worldViewport 本地坐标（黑框内侧）
     mapRender.world.x = board.mapW / 2 - c.x * sx
     mapRender.world.y = board.mapH / 2 + c.y * sy
   }
@@ -305,26 +403,16 @@ export default function () {
 
     if (typeof ResizeObserver !== 'undefined') {
       mapRender._ro = new ResizeObserver(() => {
+        const prevZoom = mapRender.contentZoom || 1
         mapRender.layoutViewport()
         if (mapRender.mapInfo) {
           mapRender.updateFitScale?.()
+          mapRender.contentZoom = prevZoom
           mapRender.centerOnMap()
         }
       })
       mapRender._ro.observe(option.canvas)
     }
-
-    // 视口固定；仅白地图缩放，并裁切在容器内
-    app.canvas.addEventListener('wheel', event => {
-      event.preventDefault()
-      event.stopPropagation()
-      if (!mapRender.world) return
-      const scale = mapRender.world.scale
-      const delta = event.deltaY > 0 ? 0.9 : 1.1
-      const next = mapRender.clampWorldScale(scale.x * delta)
-      scale.set(next, next)
-      mapRender.centerOnMap()
-    }, { passive: false })
 
     const canvasPos = (event) => {
       const rect = app.canvas.getBoundingClientRect()
@@ -333,6 +421,18 @@ export default function () {
         y: event.clientY - rect.top
       }
     }
+
+    // 仅在黑框内滚轮缩放格栅；黑框尺寸不变
+    app.canvas.addEventListener('wheel', event => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!mapRender.world || !mapRender.mapInfo) return
+      const pos = canvasPos(event)
+      if (!mapRender.pointInFrame(pos.x, pos.y)) return
+      const delta = event.deltaY > 0 ? 0.9 : 1.1
+      mapRender.contentZoom = mapRender.clampContentZoom((mapRender.contentZoom || 1) * delta)
+      mapRender.centerOnMap()
+    }, { passive: false })
 
     // 禁止拖动画布；仅保留重定位/画路径点击
     app.canvas.addEventListener('pointerdown', event => {
@@ -361,11 +461,18 @@ export default function () {
     app.canvas.addEventListener('touchstart', event => {
       if (event.touches.length === 2) {
         event.preventDefault()
+        const rect = app.canvas.getBoundingClientRect()
+        const mx = (event.touches[0].clientX + event.touches[1].clientX) / 2 - rect.left
+        const my = (event.touches[0].clientY + event.touches[1].clientY) / 2 - rect.top
+        if (!mapRender.pointInFrame(mx, my)) {
+          mapRender.initialDistance = null
+          return
+        }
         mapRender.initialDistance = Math.hypot(
           event.touches[0].clientX - event.touches[1].clientX,
           event.touches[0].clientY - event.touches[1].clientY
         )
-        mapRender.initialScale = mapRender.getWorldScale()
+        mapRender.initialContentZoom = mapRender.contentZoom || 1
       }
     }, { passive: false })
 
@@ -377,8 +484,9 @@ export default function () {
           event.touches[0].clientY - event.touches[1].clientY
         )
         const scaleRatio = currentDistance / mapRender.initialDistance
-        const next = mapRender.clampWorldScale(scaleRatio * mapRender.initialScale)
-        mapRender.world.scale.set(next, next)
+        mapRender.contentZoom = mapRender.clampContentZoom(
+          (mapRender.initialContentZoom || 1) * scaleRatio
+        )
         mapRender.centerOnMap()
       }
     }, { passive: false })
@@ -416,6 +524,27 @@ export default function () {
     if (x < 0) return [255, 255, 255, 255]
     const g = Math.max(0, Math.min(255, ((100 - x) / 100) * 255))
     return [g, g, g, 255]
+  }
+
+  /** 裁切图外围墙厚：交给屏幕固定黑框绘制，避免缩放时墙跟着变 */
+  mapRender.detectOuterWallThickness = (getCell, w, h) => {
+    const maxT = Math.min(12, Math.floor(Math.min(w, h) / 4))
+    let t = 1
+    for (let d = 1; d <= maxT; d++) {
+      let hit = false
+      for (let x = 0; x < w; x++) {
+        if (getCell(x, d - 1) >= 50 || getCell(x, h - d) >= 50) hit = true
+      }
+      for (let y = 0; y < h; y++) {
+        if (getCell(d - 1, y) >= 50 || getCell(w - d, y) >= 50) hit = true
+      }
+      if (!hit) {
+        t = Math.max(1, d - 1)
+        break
+      }
+      t = d
+    }
+    return t
   }
 
   /**
@@ -466,10 +595,15 @@ export default function () {
       }
     }
 
+    const getCrop = (x, y) => cells[(y + box.minY) * srcW + (x + box.minX)]
+    const wallT = mapRender.detectOuterWallThickness(getCrop, w, h)
     const texturePixels = new Uint8Array(w * h * 4)
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const src = cells[(y + box.minY) * srcW + (x + box.minX)]
+        let src = getCrop(x, y)
+        // 外围墙改白，黑框由固定 frameBorder 承担
+        const onRim = x < wallT || y < wallT || x >= w - wallT || y >= h - wallT
+        if (onRim && src >= 50) src = -1
         const rgba = mapRender.cellToRgba(src)
         const o = (y * w + x) * 4
         texturePixels[o] = rgba[0]
@@ -814,7 +948,7 @@ export default function () {
   }
 
   /**
-   * 重建 world 内容；按视口适配裁切后的地图（黑框区域）
+   * 按固定黑框内侧尺寸计算 fitScale；滚轮只改 contentZoom
    */
   mapRender.updateFitScale = () => {
     if (!mapRender.boardRect || !mapRender.mapInfo) return
@@ -822,15 +956,12 @@ export default function () {
     const info = mapRender.mapInfo
     const mapW = Math.max(info.width * info.resolution, 1)
     const mapH = Math.max(info.height * info.resolution, 1)
-    let W = mapW * 1.06
-    let H = mapH * 1.06
-    const aspect = board.mapH / Math.max(board.mapW, 1)
-    if (aspect > H / W) H = W * aspect
-    else W = H / aspect
-    const s = Math.min(board.mapW / W, board.mapH / H)
+    // 刚好铺满黑框内侧（黑框像素尺寸固定）
+    const s = Math.min(board.mapW / mapW, board.mapH / mapH)
     mapRender.fitScale = s
-    // 缩小不要太小（接近铺满即可）；放大有上限，且始终裁切在容器内
-    mapRender.minScale = s * 0.95
+    mapRender.minContentZoom = 1
+    mapRender.maxContentZoom = 5
+    mapRender.minScale = s
     mapRender.maxScale = s * 5
   }
 
@@ -841,8 +972,8 @@ export default function () {
     mapRender.ensureLayers()
     mapRender.layoutViewport()
     mapRender.updateFitScale()
-    const s = mapRender.clampWorldScale(mapRender.fitScale)
-    mapRender.world.scale.set(s, s)
+    mapRender.contentZoom = 1
+    mapRender.applyContentZoom()
     mapRender.app.stage.scale.set(1, 1)
     mapRender.app.stage.position.set(0, 0)
 
@@ -907,8 +1038,8 @@ export default function () {
     const board = mapRender.boardRect
     const sx = mapRender.world.scale.x || 1
     const sy = mapRender.world.scale.y || 1
-    const lx = x - board.x
-    const ly = y - board.y
+    const lx = x - (board.innerX ?? board.x)
+    const ly = y - (board.innerY ?? board.y)
     const rosX = (lx - mapRender.world.x) / sx
     const rosY = (mapRender.world.y - ly) / sy
     return { x: rosX, y: rosY }
@@ -937,6 +1068,7 @@ export default function () {
       mapRender.world.scale.set(1, 1)
       mapRender.world.position.set(0, 0)
     }
+    mapRender.contentZoom = 1
     mapRender.layoutViewport()
   }
 
