@@ -181,6 +181,13 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (teleopTimer) clearInterval(teleopTimer)
+  // 切页不断开 ROS；清空本页回调，避免打到已销毁画布
+  const noop = () => {}
+  if (rosClient.loadMapRaw) rosClient.loadMapRaw.value = noop
+  if (rosClient.loadLaserScan) rosClient.loadLaserScan.value = noop
+  if (rosClient.loadPath) rosClient.loadPath.value = noop
+  if (rosClient.loadTrajectory) rosClient.loadTrajectory.value = noop
+  if (rosClient.loadCostMap) rosClient.loadCostMap.value = noop
 })
 
 watch(robotPose, (msg) => {

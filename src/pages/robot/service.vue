@@ -1,16 +1,12 @@
 <script setup>
 import RosClient from 'components/ros/RosClient'
-import { onMounted, onUnmounted, provide, ref } from 'vue'
+import { onMounted, provide, ref } from 'vue'
 
 const rosClient = RosClient()
 provide('rosClient', rosClient)
 
 onMounted(() => {
   rosClient.init()
-})
-
-onUnmounted(() => {
-  rosClient.close()
 })
 
 const splitterModel = ref(50)

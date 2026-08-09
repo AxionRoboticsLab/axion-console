@@ -4,7 +4,7 @@
  */
 import JoyStick from 'components/ros/JoyStick.vue'
 import RosClient from 'components/ros/RosClient'
-import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
+import { computed, onMounted, provide, ref } from 'vue'
 import RosMap2d from 'components/amr-control/RosMap2d.vue'
 
 const props = defineProps({
@@ -57,11 +57,8 @@ const showJoystick = computed(() => {
 const visible = computed(() => rosClient.mapState && rosClient.mapState.value === 'terminating')
 
 onMounted(() => {
+  // 全局单例：切页不 close，登出时 releaseRosConnection
   rosClient.init()
-})
-
-onUnmounted(() => {
-  rosClient.close()
 })
 </script>
 

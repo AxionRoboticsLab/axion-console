@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, provide, ref } from 'vue'
+import { onMounted, provide, ref } from 'vue'
 import RosClient from 'components/ros/RosClient'
 import PathTrackerPid from 'components/ros-param/PathTrackerPid.vue'
 
@@ -10,10 +10,6 @@ provide('rosClient', rosClient)
 
 onMounted(() => {
   rosClient.init()
-})
-
-onUnmounted(() => {
-  rosClient.close()
 })
 
 </script>

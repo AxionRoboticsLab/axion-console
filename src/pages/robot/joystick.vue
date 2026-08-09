@@ -1,7 +1,7 @@
 <script setup>
 
 import RosClient from 'components/ros/RosClient'
-import { onMounted, onUnmounted, provide } from 'vue'
+import { onMounted, provide } from 'vue'
 import JoyStick from 'components/ros/JoyStick.vue'
 
 const rosClient = RosClient()
@@ -9,10 +9,6 @@ provide('rosClient', rosClient)
 
 onMounted(() => {
   rosClient.init()
-})
-
-onUnmounted(() => {
-  rosClient.close()
 })
 </script>
 

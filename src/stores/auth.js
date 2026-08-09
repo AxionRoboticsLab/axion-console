@@ -72,6 +72,13 @@ export const useAuthStore = defineStore('auth', {
         // ignore
       } finally {
         this.clearSession()
+        // 登出才释放 rosbridge；切页保持连接
+        try {
+          const { releaseRosConnection } = await import('components/ros/RosClient')
+          releaseRosConnection()
+        } catch (_) {
+          // ignore
+        }
       }
     },
 

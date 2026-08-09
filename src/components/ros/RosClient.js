@@ -5,7 +5,10 @@ import { useI18n } from 'vue-i18n'
 import { v4 as uuidv4 } from 'uuid'
 import { useVisualization } from 'stores/visualization'
 
-export default function RosClient () {
+/** 全局单例：切页不释放，登出时 releaseRosConnection() */
+let shared = null
+
+function createRosClient () {
   const { t } = useI18n()
   const connected = ref(false)
   const controlParams = useControlParams()
@@ -24,7 +27,8 @@ export default function RosClient () {
     loadCostMap: ref(function (data) {})
   }
 
-  let alive = true
+  let alive = false
+  let rec = null
 
   function isRos2 () {
     return controlParams.rosVersion === 'v2'
@@ -57,18 +61,11 @@ export default function RosClient () {
     return undefined
   }
 
-  /**
-   * 创建与ROS的WebSocket连接
-   */
   const createWs = () => {
     ws = new WebSocket(url)
     initWs()
   }
 
-  let rec
-  /**
-   * 重连函数
-   */
   const reConnect = () => {
     console.log('尝试重连')
     if (connected.value || !alive) return
@@ -76,9 +73,6 @@ export default function RosClient () {
     rec = setTimeout(createWs, 5000)
   }
 
-  /**
-   * 设置心跳
-   */
   const heartCheck = {
     timeoutObj: null,
     start: () => {
@@ -89,16 +83,18 @@ export default function RosClient () {
     reset: () => {
       clearTimeout(heartCheck.timeoutObj)
       heartCheck.start()
+    },
+    stop: () => {
+      clearTimeout(heartCheck.timeoutObj)
+      heartCheck.timeoutObj = null
     }
   }
 
-  /**
-   * 初始化WebSocket
-   */
   const initWs = () => {
     ws.onclose = () => {
       connected.value = false
       advertised.clear()
+      if (alive) reConnect()
     }
 
     ws.onerror = () => {
@@ -144,7 +140,7 @@ export default function RosClient () {
 
   function processTopic (rosObject) {
     switch (rosObject.topic) {
-      case '/robot_pose':rosClient.robotPose.value = rosObject.msg; break
+      case '/robot_pose': rosClient.robotPose.value = rosObject.msg; break
       case '/map_metadata': rosClient.loadMapData.value(rosObject.msg); break
       case mapTopic: rosClient.loadMapRaw.value(rosObject.msg); break
       case laserScanTopic: rosClient.loadLaserScan.value(rosObject.msg); break
@@ -162,10 +158,8 @@ export default function RosClient () {
   function wsSend (object) {
     if (ws && ws.readyState === 1) {
       ws.send(JSON.stringify(object))
-    } else {
-      if (connected.value) {
-        setTimeout(() => wsSend(object), 200)
-      }
+    } else if (alive) {
+      setTimeout(() => wsSend(object), 200)
     }
   }
 
@@ -238,23 +232,62 @@ export default function RosClient () {
     return rosClient.call('/rosapi/set_param', [nodeName + ':' + key, value + ''])
   }
 
+  /** 已连接或连接中则复用，不重复弹「已建立」 */
+  rosClient.init = () => {
+    alive = true
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return
+    }
+    createWs()
+  }
+
   rosClient.close = () => {
-    Notify.create({ type: 'info', message: t('notify_ros_release') })
+    const hadSocket = Boolean(ws)
     alive = false
+    rec && clearTimeout(rec)
+    rec = null
+    heartCheck.stop()
     connected.value = false
     advertised.clear()
-    ws.close()
+    try {
+      ws?.close()
+    } catch (_) { /* ignore */ }
+    ws = null
+    if (hadSocket) {
+      Notify.create({ type: 'info', message: t('notify_ros_release') })
+    }
   }
-  rosClient.init = createWs
 
   rosClient.mapState = ref('idle')
+  rosClient.connected = connected
+
+  return rosClient
+}
+
+function provideRos (rosClient) {
   provide('mapState', rosClient.mapState)
   provide('navState', rosClient.navState)
   provide('robotPose', rosClient.robotPose)
   provide('subscribe', rosClient.subscribe)
   provide('unsubscribe', rosClient.unsubscribe)
   provide('publish', rosClient.publish)
-  provide('connected', connected)
+  provide('connected', rosClient.connected)
+}
 
-  return rosClient
+/**
+ * 在页面 setup 中调用：复用全局连接，并向当前组件树 provide
+ */
+export default function RosClient () {
+  if (!shared) {
+    shared = createRosClient()
+  }
+  provideRos(shared)
+  return shared
+}
+
+/** 登出时调用：释放 WebSocket，下次进入页面再新建 */
+export function releaseRosConnection () {
+  if (!shared) return
+  shared.close()
+  shared = null
 }

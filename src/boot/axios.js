@@ -38,6 +38,10 @@ function clearAuthSession (store) {
 
 function goLogin (router, store, message) {
   clearAuthSession(store)
+  // 会话失效等同登出：释放 rosbridge
+  import('components/ros/RosClient')
+    .then(({ releaseRosConnection }) => releaseRosConnection())
+    .catch(() => {})
   if (router.currentRoute.value.path === '/login' || redirectingToLogin) {
     return
   }
