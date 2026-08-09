@@ -323,8 +323,10 @@ export default {
   patrol_return_charge: 'Patrol done — returning to charge…',
   patrol_return_charge_done: 'Arrived at charge dock',
   charge_point: 'Charge dock',
-  charge_point_set_btn: 'Set charge dock',
-  charge_point_set: 'Charge dock saved (one per map; overwrite on reset; auto-return after patrol)',
+  charge_point_set_btn: 'Charge dock',
+  charge_point_set: 'Charge dock saved (one per map; auto-return after patrol)',
+  charge_point_change_title: 'Move charge dock',
+  charge_point_change_confirm: 'A charge dock already exists on this map. Move it to the current position?',
   patrol_task_execute_jump: 'Opening navigation to run “{name}”',
 
   joystick_params: 'Joystick Params',

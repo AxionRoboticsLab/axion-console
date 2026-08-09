@@ -9,7 +9,7 @@ import MapCreate from 'components/amr-control/MapCreate.vue'
 import PoseManager from 'components/map-pose/PoseManager.vue'
 import PatrolMissionRunner from 'components/map-pose/PatrolMissionRunner.vue'
 import { getActiveMap, getChargePoint, setChargePoint } from 'src/api/maps'
-import { Notify } from 'quasar'
+import { Notify, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useControlParams } from 'stores/control-params'
 import { useVisualization } from 'stores/visualization'
@@ -26,6 +26,7 @@ const props = defineProps({
 
 const slots = useSlots()
 const { t } = useI18n()
+const $q = useQuasar()
 
 const isMappingWorkspace = computed(() => props.workspace === 'mapping')
 const isMonitorWorkspace = computed(() => props.workspace === 'monitor')
@@ -326,7 +327,17 @@ async function refreshChargeMarker () {
   }
 }
 
-/** 把当前箭头位姿设为充电点（返航终点 / 下次默认起点） */
+async function applyChargeAtRobot (mapId, x, y, yaw) {
+  try {
+    const pt = await setChargePoint(mapId, { x, y, yaw, name: 'charge' })
+    mapManager.drawChargeMarker?.(pt)
+    Notify.create({ type: 'positive', message: t('charge_point_set') })
+  } catch (e) {
+    Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })
+  }
+}
+
+/** 充电点：无则直接设当前位置；已有则弹框确认是否改到当前位置 */
 async function setChargeAtRobot () {
   const mapId = loadedMapId.value
   if (!mapId) {
@@ -344,13 +355,26 @@ async function setChargeAtRobot () {
     Notify.create({ type: 'warning', message: t('patrol_no_robot') })
     return
   }
+
+  let existing = null
   try {
-    const pt = await setChargePoint(mapId, { x, y, yaw, name: 'charge' })
-    mapManager.drawChargeMarker?.(pt)
-    Notify.create({ type: 'positive', message: t('charge_point_set') })
-  } catch (e) {
-    Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })
+    existing = await getChargePoint(mapId)
+  } catch (_) {
+    existing = null
   }
+
+  if (existing) {
+    $q.dialog({
+      title: t('charge_point_change_title'),
+      message: t('charge_point_change_confirm'),
+      cancel: { label: t('cancel'), flat: true, color: 'secondary' },
+      ok: { label: t('ok'), flat: true, color: 'primary', class: 'text-bold' },
+      persistent: true
+    }).onOk(() => { applyChargeAtRobot(mapId, x, y, yaw) })
+    return
+  }
+
+  await applyChargeAtRobot(mapId, x, y, yaw)
 }
 
 watch(loadedMapId, () => { refreshChargeMarker() })

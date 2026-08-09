@@ -323,8 +323,10 @@ export default {
   patrol_return_charge: '巡检完成，正在返航充电…',
   patrol_return_charge_done: '已返回充电点',
   charge_point: '充电点',
-  charge_point_set_btn: '设为充电点',
-  charge_point_set: '已保存充电点（每图仅一个，重复设置会覆盖；巡检结束自动返航）',
+  charge_point_set_btn: '充电点',
+  charge_point_set: '已保存充电点（每图仅一个；巡检结束自动返航）',
+  charge_point_change_title: '更改充电点',
+  charge_point_change_confirm: '地图上已有充电点，是否将充电点更改为当前位置？',
   patrol_task_execute_jump: '正在跳转导航并执行「{name}」',
 
   joystick_params: '手柄遥控参数',
