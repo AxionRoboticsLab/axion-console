@@ -318,6 +318,13 @@ export default {
   patrol_run_next: 'Going to “{name}” ({i}/{n})',
   patrol_deploy_hint: 'Deploy/query points here. Run patrols from Patrol Tasks → Execute.',
   patrol_mission_planned: 'Planned “{name}” ({n} points), starting patrol',
+  patrol_mission_from_charge: 'Starting “{name}” from charge dock ({n} pts)',
+  patrol_mission_from_current: 'Starting “{name}” from current pose ({n} pts)',
+  patrol_return_charge: 'Patrol done — returning to charge…',
+  patrol_return_charge_done: 'Arrived at charge dock',
+  charge_point: 'Charge dock',
+  charge_point_set_btn: 'Set charge dock',
+  charge_point_set: 'Charge dock saved (one per map; overwrite on reset; auto-return after patrol)',
   patrol_task_execute_jump: 'Opening navigation to run “{name}”',
 
   joystick_params: 'Joystick Params',

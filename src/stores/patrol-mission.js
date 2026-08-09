@@ -19,8 +19,9 @@ export const usePatrolMission = defineStore('patrol-mission', {
     ordered: [],
     index: -1,
     startedAt: null,
-    /** planning | running | paused | done | cancelled */
-    phase: 'idle'
+    /** planning | running | returning | paused | done | cancelled */
+    phase: 'idle',
+    returning: false
   }),
 
   getters: {
@@ -66,12 +67,18 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.pending = false
       this.active = true
       this.paused = false
+      this.returning = false
       this.phase = 'running'
       this.index = -1
     },
 
     setIndex (i) {
       this.index = i
+    },
+
+    setReturning (v) {
+      this.returning = Boolean(v)
+      if (this.returning) this.phase = 'returning'
     },
 
     pause () {
@@ -90,6 +97,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.active = false
       this.pending = false
       this.paused = false
+      this.returning = false
       this.phase = ok ? 'done' : 'cancelled'
     },
 
@@ -110,6 +118,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.index = -1
       this.startedAt = null
       this.phase = 'idle'
+      this.returning = false
     }
   }
 })

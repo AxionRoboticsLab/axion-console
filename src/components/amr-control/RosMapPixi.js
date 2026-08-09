@@ -273,11 +273,98 @@ export default function () {
       position: { x: clamped.x, y: clamped.y, z: pose.position.z || 0 },
       orientation: pose.orientation
     }
+    // 视角跟随：箭头沿导航路线移动时始终居中
+    if (mapRender.focusing) {
+      mapRender.centerOnRobot()
+    }
     // 有导航路径时保留目标高亮，勿被位姿刷新清掉
     if (!mapRender.navPlanPts) {
       mapRender.removeTarget()
     }
     return mapRender.pose
+  }
+
+  /** 将机器人置于黑框视口中心（不改黑框尺寸） */
+  mapRender.centerOnRobot = () => {
+    if (!mapRender.robot || !mapRender.world || !mapRender.boardRect) return
+    const board = mapRender.boardRect
+    const sx = mapRender.world.scale.x || 1
+    const sy = mapRender.world.scale.y || 1
+    mapRender.world.x = board.mapW / 2 - mapRender.robot.x * sx
+    mapRender.world.y = board.mapH / 2 - mapRender.robot.y * sy
+  }
+
+  /** 充电点专用 Logo（public/charge.png），与巡检点/机器人箭头区分 */
+  mapRender.ensureChargeTexture = async () => {
+    if (mapRender.chargeTexture) return mapRender.chargeTexture
+    mapRender.chargeTexture = await Assets.load('charge.png')
+    return mapRender.chargeTexture
+  }
+
+  mapRender.drawChargeMarker = (pt) => {
+    if (!pt || !Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
+      mapRender.clearChargeMarker()
+      return
+    }
+    const place = (tex) => {
+      if (mapRender.chargeMarker?.parent) {
+        mapRender.chargeMarker.parent.removeChild(mapRender.chargeMarker)
+      }
+      const root = new Container()
+      // 白底圆盘，保证在格栅上可读
+      const pad = new Graphics()
+      pad.circle(0, 0, 0.28)
+      pad.fill({ color: 0xffffff, alpha: 0.92 })
+      pad.circle(0, 0, 0.28)
+      pad.stroke({ width: 0.035, color: 0xEF6C00, alpha: 1 })
+      root.addChild(pad)
+
+      const icon = new Sprite(tex)
+      icon.anchor.set(0.5)
+      const worldSize = 0.42
+      const tw = Math.max(tex.width || 1, 1)
+      icon.scale.set(worldSize / tw)
+      root.addChild(icon)
+
+      root.position.set(pt.x, -pt.y)
+      mapRender.addToWorld(root)
+      mapRender.chargeMarker = root
+      // 保持在巡检点箭头之上、机器人之下
+      if (mapRender.robot) mapRender.addToWorld(mapRender.robot)
+    }
+
+    if (mapRender.chargeTexture) {
+      place(mapRender.chargeTexture)
+      return
+    }
+    void mapRender.ensureChargeTexture().then(place).catch((e) => {
+      console.warn('[RosMapPixi] charge.png load failed', e)
+      // 回退：橙底 + 闪电形
+      if (mapRender.chargeMarker?.parent) {
+        mapRender.chargeMarker.parent.removeChild(mapRender.chargeMarker)
+      }
+      const g = new Graphics()
+      g.circle(0, 0, 0.26)
+      g.fill({ color: 0xFB8C00, alpha: 1 })
+      g.moveTo(-0.06, -0.16)
+      g.lineTo(0.08, -0.02)
+      g.lineTo(0.0, -0.02)
+      g.lineTo(0.1, 0.16)
+      g.lineTo(-0.08, 0.02)
+      g.lineTo(0.02, 0.02)
+      g.closePath()
+      g.fill({ color: 0xffffff, alpha: 1 })
+      g.position.set(pt.x, -pt.y)
+      mapRender.addToWorld(g)
+      mapRender.chargeMarker = g
+    })
+  }
+
+  mapRender.clearChargeMarker = () => {
+    if (mapRender.chargeMarker?.parent) {
+      mapRender.chargeMarker.parent.removeChild(mapRender.chargeMarker)
+    }
+    mapRender.chargeMarker = null
   }
 
   /** 目标点：绿色圆点（无文字、无十字） */
@@ -336,8 +423,9 @@ export default function () {
 
       point.x = pos.position.x
       point.y = -pos.position.y
-      point.rotation = (90 + mapRender.quaternionToTheta(pos.orientation)) * Math.PI / 180
-      point.label = p.header?.seq
+      // 与机器人箭头同一朝向约定（yaw=0 朝上）
+      point.rotation = -mapRender.quaternionToTheta(pos.orientation) * Math.PI / 180
+      point.label = p.header?.seq || p.id
 
       mapRender.poseContainer.addChild(point)
     })
@@ -1034,6 +1122,9 @@ export default function () {
     if (mapRender.originMarker) {
       mapRender.addToWorld(mapRender.originMarker)
     }
+    if (mapRender.chargeMarker) {
+      mapRender.addToWorld(mapRender.chargeMarker)
+    }
     mapRender.addToWorld(mapRender.poseContainer || new Container())
     if (mapRender.robot) {
       mapRender.addToWorld(mapRender.robot)
@@ -1136,6 +1227,7 @@ export default function () {
     mapRender.mapInfo = null
     mapRender.gridOverlay = null
     mapRender.originMarker = null
+    mapRender.chargeMarker = null
     if (mapRender.robot?.parent) {
       mapRender.robot.parent.removeChild(mapRender.robot)
     }

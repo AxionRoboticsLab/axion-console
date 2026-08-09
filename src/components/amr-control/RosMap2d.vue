@@ -8,7 +8,9 @@ import MapSelector from 'components/amr-control/MapSelector.vue'
 import MapCreate from 'components/amr-control/MapCreate.vue'
 import PoseManager from 'components/map-pose/PoseManager.vue'
 import PatrolMissionRunner from 'components/map-pose/PatrolMissionRunner.vue'
-import { getActiveMap } from 'src/api/maps'
+import { getActiveMap, getChargePoint, setChargePoint } from 'src/api/maps'
+import { Notify } from 'quasar'
+import { useI18n } from 'vue-i18n'
 import { useControlParams } from 'stores/control-params'
 import { useVisualization } from 'stores/visualization'
 import TerminateProcess from 'components/amr-control/TerminateProcess.vue'
@@ -23,6 +25,7 @@ const props = defineProps({
 })
 
 const slots = useSlots()
+const { t } = useI18n()
 
 const isMappingWorkspace = computed(() => props.workspace === 'mapping')
 const isMonitorWorkspace = computed(() => props.workspace === 'monitor')
@@ -120,6 +123,54 @@ function yawFromQuat (q) {
   )
 }
 
+function stampHeader () {
+  const now = Date.now()
+  return {
+    frame_id: 'map',
+    stamp: {
+      sec: Math.floor(now / 1000),
+      nanosec: (now % 1000) * 1e6
+    }
+  }
+}
+
+/**
+ * 前端中心 + mock_nav /initialpose 对齐，避免 /robot_pose 仍停在 (0,0) 导致「飘了」
+ */
+function syncRobotToMapCenter ({ publishInitial = true } = {}) {
+  const c = mapManager.mapCenter?.()
+  if (!c || !Number.isFinite(c.x) || !Number.isFinite(c.y)) return null
+  mapManager.placeRobotAtMapCenter?.()
+  if (teleop) {
+    teleop.value.x = c.x
+    teleop.value.y = c.y
+    teleop.value.yaw = 0
+    teleop.value.vx = 0
+    teleop.value.vy = 0
+    teleop.value.wz = 0
+  }
+  if (publishInitial && connected.value) {
+    const covariance = Array(36).fill(0)
+    covariance[0] = 0.25
+    covariance[7] = 0.25
+    covariance[35] = 0.07
+    rosClient.advertise('/initialpose')
+    rosClient.publish('/initialpose', {
+      header: stampHeader(),
+      pose: {
+        pose: {
+          position: { x: c.x, y: c.y, z: 0 },
+          orientation: { x: 0, y: 0, z: 0, w: 1 }
+        },
+        covariance
+      }
+    })
+  }
+  return c
+}
+
+provide('syncRobotToMapCenter', syncRobotToMapCenter)
+
 onMounted(async () => {
   await mapManager.init({ canvas: pixiContainer.value })
   mapManager.layoutViewport?.()
@@ -131,17 +182,10 @@ onMounted(async () => {
     mapManager.processMapRaw(data)
     mapReady.value = true
     if (first) {
-      mapManager.placeRobotAtMapCenter?.()
-      const c = mapManager.mapCenter?.() || { x: 0, y: 0 }
-      if (teleop) {
-        teleop.value.x = c.x
-        teleop.value.y = c.y
-        teleop.value.yaw = 0
-        teleop.value.vx = 0
-        teleop.value.vy = 0
-        teleop.value.wz = 0
-      }
+      // 首帧载图：箭头落在正中心朝上，并纠正 mock_nav 默认 (0,0)
+      syncRobotToMapCenter({ publishInitial: true })
       mapManager.centerOnMap?.()
+      refreshChargeMarker()
     }
   }
   if (visualization.laserScanEnable) rosClient.loadLaserScan.value = mapManager.processLaserScan
@@ -267,6 +311,50 @@ function setNavMode (mode) {
 const isAutoNav = computed(() => navMode.value === 'auto')
 const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 
+async function refreshChargeMarker () {
+  const id = loadedMapId.value
+  if (!id) {
+    mapManager.clearChargeMarker?.()
+    return
+  }
+  try {
+    const pt = await getChargePoint(id)
+    if (pt) mapManager.drawChargeMarker?.(pt)
+    else mapManager.clearChargeMarker?.()
+  } catch (_) {
+    mapManager.clearChargeMarker?.()
+  }
+}
+
+/** 把当前箭头位姿设为充电点（返航终点 / 下次默认起点） */
+async function setChargeAtRobot () {
+  const mapId = loadedMapId.value
+  if (!mapId) {
+    Notify.create({ type: 'warning', message: t('patrol_need_map') })
+    return
+  }
+  const pose = mapManager.pose || robotPose?.value?.pose
+  const c = mapManager.mapCenter?.()
+  const x = pose?.position?.x ?? teleop?.value?.x ?? c?.x
+  const y = pose?.position?.y ?? teleop?.value?.y ?? c?.y
+  const yaw = pose?.orientation
+    ? yawFromQuat(pose.orientation)
+    : (teleop?.value?.yaw || 0)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    Notify.create({ type: 'warning', message: t('patrol_no_robot') })
+    return
+  }
+  try {
+    const pt = await setChargePoint(mapId, { x, y, yaw, name: 'charge' })
+    mapManager.drawChargeMarker?.(pt)
+    Notify.create({ type: 'positive', message: t('charge_point_set') })
+  } catch (e) {
+    Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })
+  }
+}
+
+watch(loadedMapId, () => { refreshChargeMarker() })
+
 </script>
 
 <template>
@@ -346,6 +434,15 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
                 color="secondary"
                 icon="flag"
                 @click="setTool('patrol')"
+              />
+              <q-btn
+                v-if="!mapEditMode && loadedMapId"
+                class="amr-rail__btn"
+                rounded outline no-wrap
+                :label="$t('charge_point_set_btn')"
+                color="orange-8"
+                icon="battery_charging_full"
+                @click="setChargeAtRobot"
               />
             </template>
           </template>

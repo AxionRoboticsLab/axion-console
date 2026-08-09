@@ -318,6 +318,13 @@ export default {
   patrol_run_next: '前往「{name}」（{i}/{n}）',
   patrol_deploy_hint: '此处仅部署/查询点位。执行巡检请到「巡检任务」点执行。',
   patrol_mission_planned: '已规划「{name}」最优顺序（{n} 点），开始巡检',
+  patrol_mission_from_charge: '从充电点出发执行「{name}」（{n} 点）',
+  patrol_mission_from_current: '从当前位置出发执行「{name}」（{n} 点）',
+  patrol_return_charge: '巡检完成，正在返航充电…',
+  patrol_return_charge_done: '已返回充电点',
+  charge_point: '充电点',
+  charge_point_set_btn: '设为充电点',
+  charge_point_set: '已保存充电点（每图仅一个，重复设置会覆盖；巡检结束自动返航）',
   patrol_task_execute_jump: '正在跳转导航并执行「{name}」',
 
   joystick_params: '手柄遥控参数',

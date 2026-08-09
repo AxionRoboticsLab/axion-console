@@ -51,3 +51,15 @@ export function renamePatrolPoint (mapId, pointId, name) {
 export function deletePatrolPoint (mapId, pointId) {
   return unwrap(api.delete(`/maps/${mapId}/patrol_points/${pointId}`))
 }
+
+export function getChargePoint (mapId) {
+  return unwrap(api.get(`/maps/${mapId}/charge_point`))
+}
+
+export function setChargePoint (mapId, { x, y, yaw = 0, name = 'charge' }) {
+  return unwrap(api.put(`/maps/${mapId}/charge_point`, { x, y, yaw, name }))
+}
+
+export function deleteChargePoint (mapId) {
+  return unwrap(api.delete(`/maps/${mapId}/charge_point`))
+}
