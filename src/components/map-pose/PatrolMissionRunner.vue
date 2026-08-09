@@ -19,7 +19,6 @@ const navState = inject('navState', ref('idle'))
 const pageMode = inject('pageMode', ref('default'))
 const focusingUi = inject('focusingUi', null)
 const syncRobotToMapCenter = inject('syncRobotToMapCenter', null)
-const teleop = inject('teleop', null)
 const mapReady = inject('mapReady', ref(false))
 const loadedMapId = inject('loadedMapId', ref(null))
 
