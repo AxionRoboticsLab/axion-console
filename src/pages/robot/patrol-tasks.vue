@@ -394,7 +394,7 @@ async function executeTask (row) {
   })
 
   Notify.create({ type: 'positive', message: t('patrol_task_execute_jump', { name: row.name }) })
-  await router.push({ name: 'robot_navigation' })
+  await router.push({ name: 'robot_monitor' })
 }
 
 function pauseRun (row) {

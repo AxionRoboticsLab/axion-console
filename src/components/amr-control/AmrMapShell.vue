@@ -1,6 +1,6 @@
 <script setup>
 /**
- * 建图 / 导航共用：ROS 连接 + 地图画布 + 摇杆
+ * 2D建图 / 实时监控共用：ROS 连接 + 地图画布 + 右侧手柄
  */
 import JoyStick from 'components/ros/JoyStick.vue'
 import RosClient from 'components/ros/RosClient'
@@ -8,11 +8,11 @@ import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import RosMap2d from 'components/amr-control/RosMap2d.vue'
 
 const props = defineProps({
-  /** 'mapping' | 'navigation' */
+  /** 'mapping' | 'monitor' */
   workspace: {
     type: String,
     default: 'mapping',
-    validator: (v) => ['mapping', 'navigation'].includes(v)
+    validator: (v) => ['mapping', 'monitor'].includes(v)
   }
 })
 
@@ -39,14 +39,12 @@ function resetTeleopPose () {
 }
 provide('resetTeleopPose', resetTeleopPose)
 
-/** 导航页：manual | auto（仅前端） */
-const navMode = ref(props.workspace === 'navigation' ? 'auto' : 'manual')
+/** 实时监控：manual | auto（仅前端） */
+const navMode = ref(props.workspace === 'monitor' ? 'auto' : 'manual')
 provide('navMode', navMode)
 
-/** 与 RosMap2d 共用：是否允许画 /map；棋盘出现后才为 true */
-const mapBoardVisible = ref(props.workspace === 'navigation')
+const mapBoardVisible = ref(props.workspace === 'monitor')
 provide('mapBoardVisible', mapBoardVisible)
-/** 已收到 OccupancyGrid 并画出棋盘 */
 const mapReady = ref(false)
 provide('mapReady', mapReady)
 
@@ -69,8 +67,11 @@ onUnmounted(() => {
 
 <template>
   <div class="amr-page">
-    <ros-map2d :workspace="props.workspace"/>
-    <joy-stick v-if="showJoystick"/>
+    <ros-map2d :workspace="props.workspace">
+      <template #rail-joy>
+        <joy-stick v-if="showJoystick" variant="rail"/>
+      </template>
+    </ros-map2d>
     <q-inner-loading
       :showing="visible"
       :label="$t('amr2d_wait')"
@@ -89,5 +90,6 @@ onUnmounted(() => {
   max-height: calc(100vh - var(--app-header-height));
   overflow: hidden;
   box-sizing: border-box;
+  background: #F2F3F5;
 }
 </style>

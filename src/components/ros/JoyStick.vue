@@ -6,7 +6,9 @@ import SliderItem from 'components/setting/SliderItem.vue'
 
 const props = defineProps({
   togglePosition: { type: String, default: 'bottom-right' },
-  visibleSwitch: { type: Boolean, default: true }
+  visibleSwitch: { type: Boolean, default: true },
+  /** floating：左下浮层；rail：嵌在右侧栏底部 */
+  variant: { type: String, default: 'floating', validator: (v) => ['floating', 'rail'].includes(v) }
 })
 
 const pad = ref()
@@ -171,7 +173,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="joy-unit" v-show="visible">
+  <div class="joy-unit" :class="{ 'joy-unit--rail': props.variant === 'rail' }" v-show="visible">
     <div class="joy-turn">
       <button
         type="button"
@@ -247,7 +249,12 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <q-page-sticky v-show="$q.screen.gt.xs" :position="props.togglePosition" :offset="[15, 15]">
+  <q-page-sticky
+    v-if="props.variant === 'floating'"
+    v-show="$q.screen.gt.xs"
+    :position="props.togglePosition"
+    :offset="[15, 15]"
+  >
     <q-btn-dropdown v-show="visible" color="primary" :label="$t('joystick_params')" :menu-offset="props.togglePosition === 'bottom-right'?[0,10]:[65,10]">
       <q-card-section>
         <slider-item :label="$t('joystick_linear')" input-label="linear" color="secondary" v-model="controlParams.linearRatio" :min="0.05"
@@ -268,7 +275,6 @@ onUnmounted(() => {
 <style scoped>
 .joy-unit {
   position: absolute;
-  /* 相对左下角略向右上挪 */
   left: 2.75rem;
   bottom: 2.4rem;
   z-index: 20;
@@ -277,6 +283,15 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.55rem;
   pointer-events: none;
+}
+
+.joy-unit--rail {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  z-index: 1;
+  transform: scale(0.92);
+  transform-origin: bottom center;
 }
 
 .joy-turn {

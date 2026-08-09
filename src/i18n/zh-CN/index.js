@@ -32,7 +32,7 @@ export default {
   notify_ros_release: '已释放与ROS的连接',
 
   robot: '机器人',
-  robot_description: '建图、导航、巡检与告警',
+  robot_description: '建图、实时监控、巡检与告警',
 
   vms: '版本中心',
   vms_description: '版本、提测与流水线',
@@ -154,6 +154,8 @@ export default {
   router_amr_2d_description: '创建、保存与加载 2D 地图',
   router_amr_nav: '导航',
   router_amr_nav_description: '载图、重定位与 Nav2 单点导航',
+  router_amr_monitor: '实时监控',
+  router_amr_monitor_description: '手动遥控与地图位姿监控，后续可接实时画面',
   router_patrol_task: '巡检任务',
   router_patrol_task_description: '配置与执行巡检任务',
   router_alarms: '告警管理',

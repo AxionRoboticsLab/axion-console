@@ -32,7 +32,7 @@ export default {
   notify_ros_release: 'Release Connection with ROS',
 
   robot: 'Robot',
-  robot_description: 'Mapping, navigation, patrol and alarms',
+  robot_description: 'Mapping, live monitor, patrol and alarms',
 
   vms: 'VMS',
   vms_description: 'Versions, release and pipelines',
@@ -154,6 +154,8 @@ export default {
   router_amr_2d_description: 'Create, save and load 2D maps',
   router_amr_nav: 'Navigation',
   router_amr_nav_description: 'Load map, relocate and Nav2 goal navigation',
+  router_amr_monitor: 'Live Monitor',
+  router_amr_monitor_description: 'Teleop and live pose on map; camera view later',
   router_patrol_task: 'Patrol Tasks',
   router_patrol_task_description: 'Configure and run patrol tasks',
   router_alarms: 'Alarms',

@@ -253,14 +253,15 @@ export default function () {
     })
 
     /*
-    鼠标滚轮缩放
+     * 画布本身不可拖、不可缩放；仅对舞台（白色地图）等比例缩放。
      */
     app.canvas.addEventListener('wheel', event => {
       event.preventDefault()
       event.stopPropagation()
       const scale = mapRender.app.stage.scale
       const delta = event.deltaY > 0 ? 0.9 : 1.1
-      scale.set(scale.x * delta, scale.y * delta)
+      const next = Math.min(8, Math.max(0.15, scale.x * delta))
+      scale.set(next, next)
       mapRender.centerOnMap()
     }, { passive: false })
 
@@ -272,7 +273,7 @@ export default function () {
       }
     }
 
-    // 禁止拖动画板；仅保留重定位/画路径点击
+    // 禁止拖动画布；仅保留重定位/画路径点击
     app.canvas.addEventListener('pointerdown', event => {
       event.preventDefault()
       event.stopPropagation()
@@ -315,7 +316,8 @@ export default function () {
           event.touches[0].clientY - event.touches[1].clientY
         )
         const scaleRatio = currentDistance / mapRender.initialDistance
-        mapRender.app.stage.scale.set(scaleRatio * mapRender.initialScale, scaleRatio * mapRender.initialScale)
+        const next = Math.min(8, Math.max(0.15, scaleRatio * mapRender.initialScale))
+        mapRender.app.stage.scale.set(next, next)
         mapRender.centerOnMap()
       }
     }, { passive: false })

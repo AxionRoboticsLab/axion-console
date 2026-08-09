@@ -208,8 +208,8 @@ defineExpose({ stopMission, tryStartPending })
 <style scoped>
 .patrol-mission-bar {
   position: absolute;
-  top: 4.5rem;
-  right: 0.75rem;
+  top: 0.65rem;
+  left: 0.65rem;
   z-index: 20;
   max-width: min(26rem, calc(100% - 1.5rem));
   padding: 0.5rem 0.75rem;

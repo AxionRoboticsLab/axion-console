@@ -39,10 +39,10 @@ const moduleLinks = [
         link: '/robot/amr'
       },
       {
-        title: 'router_amr_nav',
-        caption: 'router_amr_nav_description',
-        icon: 'near_me',
-        link: '/robot/navigation'
+        title: 'router_amr_monitor',
+        caption: 'router_amr_monitor_description',
+        icon: 'monitor_heart',
+        link: '/robot/monitor'
       },
       {
         title: 'router_patrol_task',

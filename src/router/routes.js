@@ -19,7 +19,8 @@ const routes = [
       // ---- Robot ----
       { path: 'robot', redirect: '/robot/amr' },
       { path: 'robot/amr', name: 'robot_amr', component: () => import('pages/robot/amr.vue') },
-      { path: 'robot/navigation', name: 'robot_navigation', component: () => import('pages/robot/navigation.vue') },
+      { path: 'robot/monitor', name: 'robot_monitor', component: () => import('pages/robot/monitor.vue') },
+      { path: 'robot/navigation', redirect: '/robot/monitor' },
       { path: 'robot/patrol-tasks', name: 'robot_patrol_tasks', component: () => import('pages/robot/patrol-tasks.vue') },
       { path: 'robot/alarms', name: 'robot_alarms', component: () => import('pages/robot/alarms.vue') },
       // 暂从菜单隐藏，路由保留便于调试

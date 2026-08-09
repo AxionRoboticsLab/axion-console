@@ -1,7 +1,6 @@
 <script setup>
 
-import { computed, inject, provide, onMounted, onUnmounted, ref, watch } from 'vue'
-// navMode provided by AmrMapShell
+import { computed, inject, provide, onMounted, onUnmounted, ref, watch, useSlots } from 'vue'
 
 import RosMapPixi from 'components/amr-control/RosMapPixi'
 import RobotRelocate from 'components/amr-control/RobotRelocate.vue'
@@ -14,16 +13,18 @@ import { useVisualization } from 'stores/visualization'
 import TerminateProcess from 'components/amr-control/TerminateProcess.vue'
 
 const props = defineProps({
-  /** 'mapping' 建图页 | 'navigation' 导航页 */
+  /** 'mapping' 建图页 | 'monitor' 实时监控 */
   workspace: {
     type: String,
     default: 'mapping',
-    validator: (v) => ['mapping', 'navigation'].includes(v)
+    validator: (v) => ['mapping', 'monitor'].includes(v)
   }
 })
 
+const slots = useSlots()
+
 const isMappingWorkspace = computed(() => props.workspace === 'mapping')
-const isNavigationWorkspace = computed(() => props.workspace === 'navigation')
+const isMonitorWorkspace = computed(() => props.workspace === 'monitor')
 provide('workspace', computed(() => props.workspace))
 
 const rosClient = inject('rosClient')
@@ -32,13 +33,10 @@ const mapState = inject('mapState')
 const visualization = useVisualization()
 const controlParam = useControlParams()
 
-/** 是否允许把 /map 画到画布上（只有开始建图或载入后） */
-const mapBoardVisible = inject('mapBoardVisible', ref(props.workspace === 'navigation'))
+const mapBoardVisible = inject('mapBoardVisible', ref(props.workspace === 'monitor'))
 const mapReady = inject('mapReady', ref(false))
-/** 载入地图后 state 仍是 idle，避免被 idle 监听清空栅格 */
-const keepMapOnIdle = ref(props.workspace === 'navigation')
+const keepMapOnIdle = ref(props.workspace === 'monitor')
 provide('keepMapOnIdle', keepMapOnIdle)
-/** 当前已加载的逻辑地图名 / DB id */
 const loadedMapName = ref('')
 const loadedMapId = ref(null)
 provide('loadedMapName', loadedMapName)
@@ -52,10 +50,9 @@ watch(connected, value => {
     rosClient.subscribe('/robot_pose')
     rosClient.subscribe('/map_state')
     rosClient.advertise('/map_command')
-    if (isNavigationWorkspace.value) {
+    if (isMonitorWorkspace.value) {
       rosClient.subscribe('/nav_state')
     }
-    // 导航页始终订阅全局路径，用于已走/未走着色
     const pathTopic = visualization.pathTopic || '/plan'
     if (pathTopic && !pathTopic.includes('move_base')) {
       rosClient.subscribe(pathTopic)
@@ -76,10 +73,9 @@ const resetTeleopPose = inject('resetTeleopPose', () => {})
 let teleopTimer = null
 let teleopLastMs = 0
 
-/** 建图，或导航「手动模式」：本地积分驱动箭头（手柄已发 /cmd_vel） */
 const localTeleopDrive = computed(() => {
   if (isMappingWorkspace.value) return true
-  return isNavigationWorkspace.value && navMode.value === 'manual'
+  return isMonitorWorkspace.value && navMode.value === 'manual'
 })
 
 function yawFromQuat (q) {
@@ -93,7 +89,6 @@ function yawFromQuat (q) {
 onMounted(() => {
   mapManager.init({ canvas: pixiContainer.value })
   rosClient.loadMapRaw.value = (data) => {
-    // 未建图且未载入时忽略后端残留 /map，避免「一进来就有建图板」
     if (!mapBoardVisible.value && mapState.value === 'idle') return
     const first = !mapManager.map
     mapManager.processMapRaw(data)
@@ -110,7 +105,6 @@ onMounted(() => {
     }
   }
   if (visualization.laserScanEnable) rosClient.loadLaserScan.value = mapManager.processLaserScan
-  // 路径进度着色（/plan）；不依赖设置里的 pathEnable
   rosClient.loadPath.value = mapManager.processPath
   if (visualization.trajectoryEnable) rosClient.loadTrajectory.value = mapManager.processTrajectory
   if (visualization.costMapTopic) rosClient.loadCostMap.value = mapManager.processCostMap
@@ -126,7 +120,6 @@ onMounted(() => {
     const t = teleop.value
     if (!t.vx && !t.vy && !t.wz) return
 
-    // 屏幕/地图系平移：摇杆方向 = 画板方向（不受航向耦合）
     t.x += t.vx * dt
     t.y += t.vy * dt
     t.yaw += t.wz * dt
@@ -150,9 +143,8 @@ onUnmounted(() => {
   if (teleopTimer) clearInterval(teleopTimer)
 })
 
-// 导航「自动模式」：箭头跟 /robot_pose；并刷新路径已走/未走
 watch(robotPose, (msg) => {
-  if (!isNavigationWorkspace.value) return
+  if (!isMonitorWorkspace.value) return
   if (toolMode.value === 'relocate' || toolMode.value === 'goto') return
   const pose = msg?.pose
   if (!pose?.position || !pose?.orientation) return
@@ -172,11 +164,10 @@ watch(robotPose, (msg) => {
 
 watch(mapState, value => {
   if (value === 'mapping') {
-    if (isNavigationWorkspace.value) return
+    if (isMonitorWorkspace.value) return
     keepMapOnIdle.value = false
     mapBoardVisible.value = true
     resetTeleopPose()
-    // 箭头默认落在画板几何中心
     const c = mapManager.mapCenter?.() || { x: 0, y: 0 }
     if (teleop) {
       teleop.value.x = c.x
@@ -186,7 +177,7 @@ watch(mapState, value => {
     mapManager.placeRobotAtMapCenter?.()
     mapManager.centerOnMap?.()
   } else if (value === 'idle') {
-    if (keepMapOnIdle.value || isNavigationWorkspace.value) {
+    if (keepMapOnIdle.value || isMonitorWorkspace.value) {
       mapBoardVisible.value = true
       return
     }
@@ -203,10 +194,6 @@ watch(mapState, value => {
   }
 })
 
-/**
- * 工具子模式：
- * default | relocate（重定位）| goto（去这里）| patrol（巡检点）
- */
 const toolMode = ref('default')
 provide('pageMode', toolMode)
 
@@ -216,7 +203,7 @@ const robotRelocate = ref()
 const mapEditMode = computed(() => toolMode.value === 'relocate' || toolMode.value === 'goto')
 
 function setTool (mode) {
-  if (isNavigationWorkspace.value && navMode.value === 'manual' &&
+  if (isMonitorWorkspace.value && navMode.value === 'manual' &&
     (mode === 'relocate' || mode === 'goto' || mode === 'patrol')) {
     return
   }
@@ -229,147 +216,190 @@ function setNavMode (mode) {
 }
 
 const isAutoNav = computed(() => navMode.value === 'auto')
+const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 
 </script>
 
 <template>
-  <!-- 白色顶栏：模式 Tab + 工具按钮，与下方画布分离，避免压在阴影线上 -->
-  <div
-    class="amr-chrome"
-    :class="{ 'amr-chrome--nav': isNavigationWorkspace }"
-  >
-    <div v-if="isNavigationWorkspace" class="nav-mode-tabs">
-      <q-tabs
-        dense
-        narrow-indicator
-        active-color="primary"
-        indicator-color="primary"
-        :model-value="navMode"
-        @update:model-value="setNavMode"
-      >
-        <q-tab name="manual" :label="$t('nav_mode_manual')"/>
-        <q-tab name="auto" :label="$t('nav_mode_auto')"/>
-      </q-tabs>
+  <div class="amr-layout">
+    <!-- 左侧：地图画布（不可拖动画布；滚轮等比例缩放白色地图） -->
+    <div class="amr-map-host">
+      <canvas ref="pixiContainer" class="map-canvas"/>
+      <RobotRelocate v-if="isMonitorWorkspace" ref="robotRelocate"/>
+      <pose-manager v-if="isMonitorWorkspace && toolMode === 'patrol'"/>
+      <patrol-mission-runner v-if="isMonitorWorkspace"/>
     </div>
-    <div class="amr-toolbar">
-      <div class="no-wrap flex q-gutter-x-sm justify-center items-center">
-        <template v-if="!mapEditMode">
-          <q-btn key="no-focus" no-wrap v-if="focusing" rounded outline :label="$t('amr2d_no_focus')"
-                 @click="mapManager.focusing = false; focusing = false" color="negative" icon="navigation"/>
-          <q-btn key="focusing" no-wrap v-else rounded :label="$t('amr2d_focus')"
-                 @click="mapManager.focusing = true; focusing = true" color="primary" icon="navigation"/>
-        </template>
 
-        <template v-if="isMappingWorkspace">
-          <map-create v-if="toolMode === 'default'" key="map-create"/>
-          <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
-          <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
-        </template>
+    <!-- 右侧：工具竖排（上）+ 手柄（下），占黑/灰画布内侧右缘 -->
+    <aside class="amr-rail">
+      <div class="amr-rail__top">
+        <div v-if="isMonitorWorkspace" class="amr-rail__modes">
+          <q-btn-toggle
+            dense
+            unelevated
+            toggle-color="primary"
+            :options="[
+              { label: $t('nav_mode_manual'), value: 'manual' },
+              { label: $t('nav_mode_auto'), value: 'auto' }
+            ]"
+            :model-value="navMode"
+            @update:model-value="setNavMode"
+          />
+        </div>
 
-        <template v-else>
-          <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
-          <template v-if="isAutoNav">
+        <div class="amr-rail__tools column q-gutter-y-sm">
+          <template v-if="!mapEditMode">
             <q-btn
-              key="nav-relocate"
-              no-wrap
-              rounded
-              :outline="toolMode !== 'relocate'"
-              :label="$t('nav_relocate')"
-              color="accent"
-              icon="my_location"
-              @click="setTool('relocate')"
+              v-if="focusing"
+              class="amr-rail__btn"
+              rounded outline no-wrap
+              :label="$t('amr2d_no_focus')"
+              color="negative"
+              icon="navigation"
+              @click="mapManager.focusing = false; focusing = false"
             />
             <q-btn
-              key="nav-goto"
-              no-wrap
-              rounded
-              :outline="toolMode !== 'goto'"
-              :label="$t('nav_goto')"
+              v-else
+              class="amr-rail__btn"
+              rounded no-wrap
+              :label="$t('amr2d_focus')"
               color="primary"
-              icon="place"
-              @click="setTool('goto')"
-            />
-            <q-btn
-              key="patrol"
-              no-wrap
-              rounded
-              v-if="!mapEditMode"
-              :outline="toolMode !== 'patrol'"
-              :label="$t('patrol')"
-              color="secondary"
-              icon="flag"
-              @click="setTool('patrol')"
+              icon="navigation"
+              @click="mapManager.focusing = true; focusing = true"
             />
           </template>
-        </template>
+
+          <template v-if="isMappingWorkspace">
+            <map-create v-if="toolMode === 'default'" key="map-create"/>
+            <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
+            <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
+          </template>
+
+          <template v-else>
+            <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
+            <template v-if="isAutoNav">
+              <q-btn
+                class="amr-rail__btn"
+                rounded no-wrap
+                :outline="toolMode !== 'relocate'"
+                :label="$t('nav_relocate')"
+                color="accent"
+                icon="my_location"
+                @click="setTool('relocate')"
+              />
+              <q-btn
+                class="amr-rail__btn"
+                rounded no-wrap
+                :outline="toolMode !== 'goto'"
+                :label="$t('nav_goto')"
+                color="primary"
+                icon="place"
+                @click="setTool('goto')"
+              />
+              <q-btn
+                v-if="!mapEditMode"
+                class="amr-rail__btn"
+                rounded no-wrap
+                :outline="toolMode !== 'patrol'"
+                :label="$t('patrol')"
+                color="secondary"
+                icon="flag"
+                @click="setTool('patrol')"
+              />
+            </template>
+          </template>
+        </div>
       </div>
-    </div>
+
+      <div v-if="hasRailJoy" class="amr-rail__joy">
+        <slot name="rail-joy"/>
+      </div>
+    </aside>
   </div>
-  <canvas
-    ref="pixiContainer"
-    class="map-canvas"
-    :class="{ 'map-canvas--nav': isNavigationWorkspace }"
-  />
-  <RobotRelocate v-if="isNavigationWorkspace" ref="robotRelocate"/>
-  <pose-manager v-if="isNavigationWorkspace && toolMode === 'patrol'"/>
-  <patrol-mission-runner v-if="isNavigationWorkspace"/>
 </template>
 
 <style scoped>
-.amr-chrome {
+.amr-layout {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 40;
-  background: #fff;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  pointer-events: none;
-  /* 建图页：单行工具条 */
-  height: 3.25rem;
+  inset: 0;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  flex-direction: row;
+  align-items: stretch;
+  background: #F2F3F5;
+  overflow: hidden;
 }
-.amr-chrome--nav {
-  /* 导航页：模式 Tab + 工具按钮两行，全部落在白色区内 */
-  height: 5.75rem;
-  justify-content: flex-start;
-  padding: 0.15rem 0.5rem 0.35rem;
-  box-sizing: border-box;
+
+.amr-map-host {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  /* 左/上/底与地图贴齐，不再留一圈外框感 */
+  background: #F2F3F5;
 }
-.nav-mode-tabs {
-  pointer-events: auto;
-  align-self: flex-start;
-  min-height: 2.1rem;
-}
-.amr-toolbar {
-  pointer-events: none;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 2.75rem;
-  flex: 1;
-}
-.amr-toolbar :deep(.q-btn),
-.amr-toolbar :deep(.q-btn-dropdown) {
-  pointer-events: auto;
-}
+
 .map-canvas {
   position: absolute;
-  top: 3.25rem;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   width: 100% !important;
-  height: calc(100% - 3.25rem) !important;
+  height: 100% !important;
   touch-action: none;
   user-select: none;
   display: block;
   z-index: 1;
 }
-.map-canvas--nav {
-  top: 5.75rem;
-  height: calc(100% - 5.75rem) !important;
+
+.amr-rail {
+  flex: 0 0 11.5rem;
+  width: 11.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0.65rem 0.55rem 0.75rem;
+  background: #E8E9EB;
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  z-index: 30;
+  overflow: hidden;
+}
+
+.amr-rail__top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+  overflow: auto;
+}
+
+.amr-rail__modes {
+  width: 100%;
+}
+.amr-rail__modes :deep(.q-btn-toggle) {
+  width: 100%;
+  flex-wrap: nowrap;
+}
+.amr-rail__modes :deep(.q-btn) {
+  flex: 1;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.2rem;
+}
+
+.amr-rail__tools {
+  width: 100%;
+}
+.amr-rail__tools :deep(.q-btn),
+.amr-rail__btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.amr-rail__joy {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding-top: 0.5rem;
+  margin-top: auto;
 }
 </style>
