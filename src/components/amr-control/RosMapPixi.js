@@ -981,18 +981,17 @@ export default function () {
     mapRender.removeTarget?.()
   }
 
-  /** 完整巡检路线（当前位置 → 各点排序后折线） */
+  /** 完整巡检路线（当前位置 → 各点排序后折线，含返航充电点） */
   mapRender.drawPatrolTour = (pts) => {
     if (!mapRender.app) return
     mapRender.clearPatrolTour()
     if (!pts || pts.length < 2) return
     const layer = new Graphics()
-    // 底线：完整巡检路径
-    mapRender.strokePoly(layer, pts, 0x00897B, 0.1, 0.85)
-    // 各拐点小圆
+    // 浅青绿：最优巡检顺序示意，不抢导航蓝线
+    mapRender.strokePoly(layer, pts, 0x80CBC4, 0.07, 0.55)
     for (let i = 1; i < pts.length; i++) {
-      layer.circle(pts[i].x, -pts[i].y, 0.1)
-      layer.fill({ color: 0x00897B, alpha: 0.55 })
+      layer.circle(pts[i].x, -pts[i].y, 0.07)
+      layer.fill({ color: 0x80CBC4, alpha: 0.35 })
     }
     mapRender.addToWorld(layer)
     mapRender.patrolTour = layer
@@ -1005,6 +1004,14 @@ export default function () {
       mapRender.patrolTour.parent.removeChild(mapRender.patrolTour)
     }
     mapRender.patrolTour = null
+  }
+
+  /** 结束任务后：取消跟随、缩放回全图、地图居中（避免格栅偏到一角留白） */
+  mapRender.restoreMapOverview = () => {
+    mapRender.focusing = false
+    mapRender.contentZoom = 1
+    mapRender.applyContentZoom?.()
+    mapRender.centerOnMap?.()
   }
 
   mapRender.processTrajectory = (data) => {

@@ -212,6 +212,13 @@ function takeNextRun (resp) {
   }
 }
 
+function restoreMapAfterMission () {
+  if (focusingUi) focusingUi.value = false
+  mapManager?.clearPatrolTour?.()
+  mapManager?.clearNavPlan?.()
+  mapManager?.restoreMapOverview?.()
+}
+
 async function finishMissionOk (msgKey) {
   returningHome.value = false
   const resp = await syncRunAction('complete', { result_ok: true, progress_index: mission.index })
@@ -220,6 +227,7 @@ async function finishMissionOk (msgKey) {
   mapManager?.clearNavPlan?.()
   Notify.create({ type: 'positive', message: t(msgKey) })
   takeNextRun(resp)
+  if (!mission.pending) restoreMapAfterMission()
 }
 
 function beginReturnHome () {
@@ -348,7 +356,18 @@ async function stopMission () {
   mapManager?.clearNavPlan?.()
   Notify.create({ type: 'info', message: t('patrol_run_stopped') })
   takeNextRun(resp)
+  if (!mission.pending) restoreMapAfterMission()
 }
+
+// 任务结果页取消等：会话结束后也恢复全图格栅
+watch(
+  () => mission.active,
+  (active, was) => {
+    if (was && !active && !mission.pending) {
+      restoreMapAfterMission()
+    }
+  }
+)
 
 watch(
   () => [mission.pending, mission.runId, mapReady?.value, loadedMapId?.value],
