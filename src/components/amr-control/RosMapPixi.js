@@ -196,6 +196,13 @@ export default function () {
     }
   }
 
+  /** 格网步长；格线穿过地图中心，保证中心为交点 */
+  mapRender.gridStep = () => {
+    const info = mapRender.mapInfo
+    if (!info) return 0.5
+    return Math.max(info.resolution * 10, 0.5)
+  }
+
   /** 地图世界坐标包围盒（略向内收，避免贴边） */
   mapRender.mapBounds = () => {
     const info = mapRender.mapInfo
@@ -217,7 +224,7 @@ export default function () {
     }
   }
 
-  /** 无 /robot_pose 时，把箭头放在地图中心，避免停在画布左上角 */
+  /** 默认：箭头在正中心（格点交点），朝上方 */
   mapRender.placeRobotAtMapCenter = () => {
     if (!mapRender.robot) {
       return
@@ -226,6 +233,7 @@ export default function () {
     mapRender.robot.x = c.x
     mapRender.robot.y = -c.y
     mapRender.robot.rotation = 0
+    mapRender.robot.children?.forEach((ch) => { ch.rotation = 0 })
     mapRender.pose = {
       position: { x: c.x, y: c.y, z: 0 },
       orientation: { x: 0, y: 0, z: 0, w: 1 }
@@ -579,6 +587,10 @@ export default function () {
 
     const getCrop = (x, y) => cells[(y + box.minY) * srcW + (x + box.minX)]
     const wallT = mapRender.detectOuterWallThickness(getCrop, w, h)
+    // 中心附近黑色方格改由灰色圆心标记绘制
+    const midX = Math.floor(w / 2)
+    const midY = Math.floor(h / 2)
+    const clearR = Math.max(1, Math.min(3, Math.ceil(0.12 / Math.max(res, 1e-6))))
     const texturePixels = new Uint8Array(w * h * 4)
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
@@ -586,6 +598,13 @@ export default function () {
         // 外围墙改白，黑框由固定 frameBorder 承担
         const onRim = x < wallT || y < wallT || x >= w - wallT || y >= h - wallT
         if (onRim && src >= 50) src = -1
+        if (
+          src >= 50 &&
+          Math.abs(x - midX) <= clearR &&
+          Math.abs(y - midY) <= clearR
+        ) {
+          src = -1
+        }
         const rgba = mapRender.cellToRgba(src)
         const o = (y * w + x) * 4
         texturePixels[o] = rgba[0]
@@ -1004,12 +1023,16 @@ export default function () {
     mapRender.app.stage.position.set(0, 0)
 
     mapRender.rebuildGridOverlay()
+    mapRender.rebuildOriginMarker()
     mapRender.world.removeChildren()
     if (mapRender.map) {
       mapRender.addToWorld(mapRender.map)
     }
     if (mapRender.gridOverlay) {
       mapRender.addToWorld(mapRender.gridOverlay)
+    }
+    if (mapRender.originMarker) {
+      mapRender.addToWorld(mapRender.originMarker)
     }
     mapRender.addToWorld(mapRender.poseContainer || new Container())
     if (mapRender.robot) {
@@ -1018,15 +1041,29 @@ export default function () {
     mapRender.centerOnMap()
   }
 
-  /** 仅在黑框（裁切后的地图）内画浅色格网 */
+  /** 灰色实心圆，圆心落在地图中心格点交点 */
+  mapRender.rebuildOriginMarker = () => {
+    const info = mapRender.mapInfo
+    if (!info) {
+      mapRender.originMarker = null
+      return
+    }
+    const c = mapRender.mapCenter()
+    const r = Math.max(info.resolution * 2.2, 0.07)
+    const g = new Graphics()
+    g.circle(0, 0, r)
+    g.fill({ color: 0x9E9E9E, alpha: 1 })
+    g.position.set(c.x, -c.y)
+    mapRender.originMarker = g
+  }
+
+  /** 仅在黑框内画浅色格网；格线穿过中心交点 */
   mapRender.rebuildGridOverlay = () => {
     const info = mapRender.mapInfo
     if (!info) {
       mapRender.gridOverlay = null
       return
     }
-    const g = new Graphics()
-    // 略向内收，格线落在黑框内侧
     const inset = Math.max(info.resolution * 1.5, 0.04)
     const minX = info.origin.position.x + inset
     const minY = info.origin.position.y + inset
@@ -1036,15 +1073,29 @@ export default function () {
       mapRender.gridOverlay = null
       return
     }
-    const step = Math.max(info.resolution * 10, 0.5)
+    const c = mapRender.mapCenter()
+    const step = mapRender.gridStep()
+    const g = new Graphics()
     const color = 0x90a4ae
     const stroke = { width: Math.max(info.resolution * 0.4, 0.02), color, alpha: 0.65 }
-    for (let x = minX; x <= maxX + 1e-6; x += step) {
+    // 竖线：以中心为基准向两侧铺
+    for (let x = c.x; x >= minX - 1e-9; x -= step) {
       g.moveTo(x, -minY)
       g.lineTo(x, -maxY)
       g.stroke(stroke)
     }
-    for (let y = minY; y <= maxY + 1e-6; y += step) {
+    for (let x = c.x + step; x <= maxX + 1e-9; x += step) {
+      g.moveTo(x, -minY)
+      g.lineTo(x, -maxY)
+      g.stroke(stroke)
+    }
+    // 横线
+    for (let y = c.y; y >= minY - 1e-9; y -= step) {
+      g.moveTo(minX, -y)
+      g.lineTo(maxX, -y)
+      g.stroke(stroke)
+    }
+    for (let y = c.y + step; y <= maxY + 1e-9; y += step) {
       g.moveTo(minX, -y)
       g.lineTo(maxX, -y)
       g.stroke(stroke)
@@ -1084,6 +1135,7 @@ export default function () {
     mapRender.map = null
     mapRender.mapInfo = null
     mapRender.gridOverlay = null
+    mapRender.originMarker = null
     if (mapRender.robot?.parent) {
       mapRender.robot.parent.removeChild(mapRender.robot)
     }

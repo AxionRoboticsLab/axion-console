@@ -95,13 +95,16 @@ onMounted(async () => {
     mapManager.processMapRaw(data)
     mapReady.value = true
     if (first) {
+      mapManager.placeRobotAtMapCenter?.()
       const c = mapManager.mapCenter?.() || { x: 0, y: 0 }
       if (teleop) {
         teleop.value.x = c.x
         teleop.value.y = c.y
         teleop.value.yaw = 0
+        teleop.value.vx = 0
+        teleop.value.vy = 0
+        teleop.value.wz = 0
       }
-      mapManager.placeRobotAtMapCenter?.()
       mapManager.centerOnMap?.()
     }
   }
