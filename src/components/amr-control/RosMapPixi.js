@@ -115,7 +115,10 @@ export default function () {
       position: { x: clamped.x, y: clamped.y, z: pose.position.z || 0 },
       orientation: pose.orientation
     }
-    mapRender.removeTarget()
+    // 有导航路径时保留目标高亮，勿被位姿刷新清掉
+    if (!mapRender.navPlanPts) {
+      mapRender.removeTarget()
+    }
     return mapRender.pose
   }
 
@@ -456,29 +459,115 @@ export default function () {
   }
 
   mapRender.processPath = (data) => {
-    if (data.poses.length < 2) {
-      mapRender.clearPath()
+    if (!data?.poses || data.poses.length < 2) {
+      mapRender.clearNavPlan()
       return
     }
-    const path = new Graphics()
-    path.setStrokeStyle({
-      width: 0.05,
-      color: getCssVar('positive')
-    })
-    path.moveTo(data.poses[0].pose.position.x, -data.poses[0].pose.position.y)
-    data.poses.forEach(p => {
-      path.lineTo(p.pose.position.x, -p.pose.position.y)
-    })
-    if (mapRender.path) {
-      mapRender.app.stage.removeChild(mapRender.path)
+    mapRender.navPlanPts = data.poses.map((p) => ({
+      x: Number(p.pose.position.x) || 0,
+      y: Number(p.pose.position.y) || 0
+    }))
+    const last = data.poses[data.poses.length - 1]
+    // 目标点高亮（绿色箭头）
+    mapRender.updateTargetPose(last.pose)
+    mapRender.drawGoalHalo(last.pose.position.x, last.pose.position.y)
+    mapRender.redrawNavPlanProgress()
+  }
+
+  /** 目标点外圈高亮 */
+  mapRender.drawGoalHalo = (x, y) => {
+    if (mapRender.goalHalo?.parent) {
+      mapRender.goalHalo.parent.removeChild(mapRender.goalHalo)
     }
-    mapRender.app.stage.addChild(path)
-    mapRender.path = path
+    const g = new Graphics()
+    g.circle(x, -y, 0.28)
+    g.stroke({ width: 0.06, color: 0x21BA45, alpha: 0.95 })
+    g.circle(x, -y, 0.14)
+    g.fill({ color: 0x21BA45, alpha: 0.35 })
+    mapRender.app.stage.addChild(g)
+    mapRender.goalHalo = g
+  }
+
+  mapRender.splitPlanAtRobot = (pts, rx, ry) => {
+    let best = { dist: Infinity, seg: 0, t: 0, px: pts[0].x, py: pts[0].y }
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i].x
+      const ay = pts[i].y
+      const bx = pts[i + 1].x
+      const by = pts[i + 1].y
+      const abx = bx - ax
+      const aby = by - ay
+      const len2 = abx * abx + aby * aby || 1e-9
+      let t = ((rx - ax) * abx + (ry - ay) * aby) / len2
+      t = Math.max(0, Math.min(1, t))
+      const px = ax + t * abx
+      const py = ay + t * aby
+      const d = Math.hypot(rx - px, ry - py)
+      if (d < best.dist) best = { dist: d, seg: i, t, px, py }
+    }
+    const done = pts.slice(0, best.seg + 1).concat([{ x: best.px, y: best.py }])
+    const remain = [{ x: best.px, y: best.py }].concat(pts.slice(best.seg + 1))
+    return { done, remain }
+  }
+
+  mapRender.strokePoly = (gfx, pts, color, width = 0.07, alpha = 1) => {
+    if (!pts || pts.length < 2) return
+    gfx.moveTo(pts[0].x, -pts[0].y)
+    for (let i = 1; i < pts.length; i++) {
+      gfx.lineTo(pts[i].x, -pts[i].y)
+    }
+    gfx.stroke({ width, color, alpha })
+  }
+
+  /** 已走灰 / 未走主题色，随机器人位置刷新 */
+  mapRender.redrawNavPlanProgress = (robotXY) => {
+    const pts = mapRender.navPlanPts
+    if (!pts || pts.length < 2 || !mapRender.app) return
+
+    const rx = robotXY?.x ?? mapRender.pose?.position?.x
+    const ry = robotXY?.y ?? mapRender.pose?.position?.y
+    let done = pts
+    let remain = []
+    if (rx != null && ry != null && Number.isFinite(rx) && Number.isFinite(ry)) {
+      const split = mapRender.splitPlanAtRobot(pts, rx, ry)
+      done = split.done
+      remain = split.remain
+    }
+
+    const layer = new Graphics()
+    // 已走过：灰色
+    mapRender.strokePoly(layer, done, 0x9E9E9E, 0.08, 0.95)
+    // 未走完：蓝色高亮
+    mapRender.strokePoly(layer, remain, 0x1976D2, 0.09, 1)
+
+    if (mapRender.path?.parent) {
+      mapRender.path.parent.removeChild(mapRender.path)
+    }
+    mapRender.app.stage.addChild(layer)
+    mapRender.path = layer
+
+    // 保证目标高亮在路径之上
+    if (mapRender.goalHalo) mapRender.app.stage.addChild(mapRender.goalHalo)
+    if (mapRender.target) mapRender.app.stage.addChild(mapRender.target)
+    if (mapRender.robot) mapRender.app.stage.addChild(mapRender.robot)
+  }
+
+  mapRender.clearNavPlan = () => {
+    mapRender.navPlanPts = null
+    if (mapRender.path?.parent) {
+      mapRender.path.parent.removeChild(mapRender.path)
+    }
+    mapRender.path = null
+    if (mapRender.goalHalo?.parent) {
+      mapRender.goalHalo.parent.removeChild(mapRender.goalHalo)
+    }
+    mapRender.goalHalo = null
+    mapRender.removeTarget?.()
   }
 
   mapRender.processTrajectory = (data) => {
     if (data.poses.length < 2) {
-      mapRender.clearPath()
+      mapRender.clearTrajectory()
       return
     }
     const trajectory = new Graphics()
@@ -495,10 +584,7 @@ export default function () {
   }
 
   mapRender.clearPath = () => {
-    if (mapRender.path) {
-      mapRender.app.stage.removeChild(mapRender.path)
-      mapRender.path = null
-    }
+    mapRender.clearNavPlan()
   }
 
   mapRender.clearTrajectory = () => {

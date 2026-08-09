@@ -147,7 +147,10 @@ export default function RosClient () {
       case '/map_metadata': rosClient.loadMapData.value(rosObject.msg); break
       case mapTopic: rosClient.loadMapRaw.value(rosObject.msg); break
       case laserScanTopic: rosClient.loadLaserScan.value(rosObject.msg); break
-      case pathTopic: rosClient.loadPath.value(rosObject.msg); break
+      case pathTopic:
+      case '/plan':
+        rosClient.loadPath.value(rosObject.msg)
+        break
       case trajectoryTopic: rosClient.loadTrajectory.value(rosObject.msg); break
       case costMapTopic: rosClient.loadCostMap.value(rosObject.msg); break
       case '/map_state': rosClient.mapState.value = rosObject.msg.data; break

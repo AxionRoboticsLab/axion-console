@@ -51,9 +51,9 @@ watch(connected, value => {
     rosClient.subscribe('/robot_pose')
     rosClient.subscribe('/map_state')
     rosClient.advertise('/map_command')
-    // 勿订阅尚未存在的 move_base 旧话题，否则 rosbridge 刷 ERROR
-    const pathTopic = visualization.pathTopic || ''
-    if (visualization.pathEnable && pathTopic && !pathTopic.includes('move_base')) {
+    // 导航页始终订阅全局路径，用于已走/未走着色
+    const pathTopic = visualization.pathTopic || '/plan'
+    if (pathTopic && !pathTopic.includes('move_base')) {
       rosClient.subscribe(pathTopic)
     }
     if (visualization.laserScanEnable) rosClient.subscribe(visualization.laserScanTopic)
@@ -106,7 +106,8 @@ onMounted(() => {
     }
   }
   if (visualization.laserScanEnable) rosClient.loadLaserScan.value = mapManager.processLaserScan
-  if (visualization.pathEnable) rosClient.loadPath.value = mapManager.processPath
+  // 路径进度着色（/plan）；不依赖设置里的 pathEnable
+  rosClient.loadPath.value = mapManager.processPath
   if (visualization.trajectoryEnable) rosClient.loadTrajectory.value = mapManager.processTrajectory
   if (visualization.costMapTopic) rosClient.loadCostMap.value = mapManager.processCostMap
 
@@ -145,19 +146,24 @@ onUnmounted(() => {
   if (teleopTimer) clearInterval(teleopTimer)
 })
 
-// 导航「自动模式」：箭头跟 /robot_pose（axion-nav）；手动模式用本地积分避免抢姿态
+// 导航「自动模式」：箭头跟 /robot_pose；并刷新路径已走/未走
 watch(robotPose, (msg) => {
   if (!isNavigationWorkspace.value) return
-  if (navMode.value === 'manual') return
   if (toolMode.value === 'relocate' || toolMode.value === 'goto') return
   const pose = msg?.pose
   if (!pose?.position || !pose?.orientation) return
-  mapManager.updateRobotPose(pose)
-  if (teleop) {
-    teleop.value.x = pose.position.x
-    teleop.value.y = pose.position.y
-    teleop.value.yaw = yawFromQuat(pose.orientation)
+  if (navMode.value !== 'manual') {
+    mapManager.updateRobotPose(pose)
+    if (teleop) {
+      teleop.value.x = pose.position.x
+      teleop.value.y = pose.position.y
+      teleop.value.yaw = yawFromQuat(pose.orientation)
+    }
   }
+  mapManager.redrawNavPlanProgress?.({
+    x: pose.position.x,
+    y: pose.position.y
+  })
 }, { deep: true })
 
 watch(mapState, value => {
