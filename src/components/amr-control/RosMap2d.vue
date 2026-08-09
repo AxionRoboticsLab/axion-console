@@ -193,100 +193,122 @@ const isAutoNav = computed(() => navMode.value === 'auto')
 </script>
 
 <template>
-  <div v-if="isNavigationWorkspace" class="nav-mode-tabs">
-    <q-tabs
-      dense
-      narrow-indicator
-      active-color="primary"
-      indicator-color="primary"
-      :model-value="navMode"
-      @update:model-value="setNavMode"
-    >
-      <q-tab name="manual" :label="$t('nav_mode_manual')"/>
-      <q-tab name="auto" :label="$t('nav_mode_auto')"/>
-    </q-tabs>
-  </div>
-  <div class="amr-toolbar" :class="{ 'amr-toolbar--nav': isNavigationWorkspace }">
-    <div class="no-wrap flex q-gutter-x-sm justify-center items-center q-pa-sm">
-      <template v-if="!mapEditMode">
-        <q-btn key="no-focus" no-wrap v-if="focusing" rounded outline :label="$t('amr2d_no_focus')"
-               @click="mapManager.focusing = false; focusing = false" color="negative" icon="navigation"/>
-        <q-btn key="focusing" no-wrap v-else rounded :label="$t('amr2d_focus')"
-               @click="mapManager.focusing = true; focusing = true" color="primary" icon="navigation"/>
-      </template>
-
-      <!-- 建图页：创建 / 保存 / 加载 / 取消 -->
-      <template v-if="isMappingWorkspace">
-        <map-create v-if="toolMode === 'default'" key="map-create"/>
-        <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
-        <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
-      </template>
-
-      <!-- 导航页：加载地图始终可；自动模式才可重定位/去这里/巡检点 -->
-      <template v-else>
-        <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
-        <template v-if="isAutoNav">
-          <q-btn
-            key="nav-relocate"
-            no-wrap
-            rounded
-            :outline="toolMode !== 'relocate'"
-            :label="$t('nav_relocate')"
-            color="accent"
-            icon="my_location"
-            @click="setTool('relocate')"
-          />
-          <q-btn
-            key="nav-goto"
-            no-wrap
-            rounded
-            :outline="toolMode !== 'goto'"
-            :label="$t('nav_goto')"
-            color="primary"
-            icon="place"
-            @click="setTool('goto')"
-          />
-          <q-btn
-            key="patrol"
-            no-wrap
-            rounded
-            v-if="!mapEditMode"
-            :outline="toolMode !== 'patrol'"
-            :label="$t('patrol')"
-            color="secondary"
-            icon="flag"
-            @click="setTool('patrol')"
-          />
+  <!-- 白色顶栏：模式 Tab + 工具按钮，与下方画布分离，避免压在阴影线上 -->
+  <div
+    class="amr-chrome"
+    :class="{ 'amr-chrome--nav': isNavigationWorkspace }"
+  >
+    <div v-if="isNavigationWorkspace" class="nav-mode-tabs">
+      <q-tabs
+        dense
+        narrow-indicator
+        active-color="primary"
+        indicator-color="primary"
+        :model-value="navMode"
+        @update:model-value="setNavMode"
+      >
+        <q-tab name="manual" :label="$t('nav_mode_manual')"/>
+        <q-tab name="auto" :label="$t('nav_mode_auto')"/>
+      </q-tabs>
+    </div>
+    <div class="amr-toolbar">
+      <div class="no-wrap flex q-gutter-x-sm justify-center items-center">
+        <template v-if="!mapEditMode">
+          <q-btn key="no-focus" no-wrap v-if="focusing" rounded outline :label="$t('amr2d_no_focus')"
+                 @click="mapManager.focusing = false; focusing = false" color="negative" icon="navigation"/>
+          <q-btn key="focusing" no-wrap v-else rounded :label="$t('amr2d_focus')"
+                 @click="mapManager.focusing = true; focusing = true" color="primary" icon="navigation"/>
         </template>
-      </template>
+
+        <template v-if="isMappingWorkspace">
+          <map-create v-if="toolMode === 'default'" key="map-create"/>
+          <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
+          <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
+        </template>
+
+        <template v-else>
+          <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
+          <template v-if="isAutoNav">
+            <q-btn
+              key="nav-relocate"
+              no-wrap
+              rounded
+              :outline="toolMode !== 'relocate'"
+              :label="$t('nav_relocate')"
+              color="accent"
+              icon="my_location"
+              @click="setTool('relocate')"
+            />
+            <q-btn
+              key="nav-goto"
+              no-wrap
+              rounded
+              :outline="toolMode !== 'goto'"
+              :label="$t('nav_goto')"
+              color="primary"
+              icon="place"
+              @click="setTool('goto')"
+            />
+            <q-btn
+              key="patrol"
+              no-wrap
+              rounded
+              v-if="!mapEditMode"
+              :outline="toolMode !== 'patrol'"
+              :label="$t('patrol')"
+              color="secondary"
+              icon="flag"
+              @click="setTool('patrol')"
+            />
+          </template>
+        </template>
+      </div>
     </div>
   </div>
-  <canvas ref="pixiContainer" class="map-canvas"/>
+  <canvas
+    ref="pixiContainer"
+    class="map-canvas"
+    :class="{ 'map-canvas--nav': isNavigationWorkspace }"
+  />
   <RobotRelocate v-if="isNavigationWorkspace" ref="robotRelocate"/>
   <pose-manager v-if="isNavigationWorkspace && toolMode === 'patrol'"/>
 </template>
 
 <style scoped>
-.nav-mode-tabs {
-  position: absolute;
-  top: 0.35rem;
-  left: 0.5rem;
-  z-index: 45;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 8px;
-  padding: 0 0.25rem;
-}
-.amr-toolbar {
+.amr-chrome {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 3.5rem;
   z-index: 40;
+  background: #fff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   pointer-events: none;
+  /* 建图页：单行工具条 */
+  height: 3.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
-.amr-toolbar--nav {
-  top: 2.4rem;
+.amr-chrome--nav {
+  /* 导航页：模式 Tab + 工具按钮两行，全部落在白色区内 */
+  height: 5.75rem;
+  justify-content: flex-start;
+  padding: 0.15rem 0.5rem 0.35rem;
+  box-sizing: border-box;
+}
+.nav-mode-tabs {
+  pointer-events: auto;
+  align-self: flex-start;
+  min-height: 2.1rem;
+}
+.amr-toolbar {
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 2.75rem;
+  flex: 1;
 }
 .amr-toolbar :deep(.q-btn),
 .amr-toolbar :deep(.q-btn-dropdown) {
@@ -294,15 +316,19 @@ const isAutoNav = computed(() => navMode.value === 'auto')
 }
 .map-canvas {
   position: absolute;
-  top: 3.5rem;
+  top: 3.25rem;
   left: 0;
   right: 0;
   bottom: 0;
   width: 100% !important;
-  height: calc(100% - 3.5rem) !important;
+  height: calc(100% - 3.25rem) !important;
   touch-action: none;
   user-select: none;
   display: block;
   z-index: 1;
+}
+.map-canvas--nav {
+  top: 5.75rem;
+  height: calc(100% - 5.75rem) !important;
 }
 </style>
