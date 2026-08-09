@@ -32,8 +32,8 @@ const visualization = useVisualization()
 const controlParam = useControlParams()
 
 /** 是否允许把 /map 画到画布上（只有开始建图或载入后） */
-const mapBoardVisible = ref(props.workspace === 'navigation')
-provide('mapBoardVisible', mapBoardVisible)
+const mapBoardVisible = inject('mapBoardVisible', ref(props.workspace === 'navigation'))
+const mapReady = inject('mapReady', ref(false))
 /** 载入地图后 state 仍是 idle，避免被 idle 监听清空栅格 */
 const keepMapOnIdle = ref(props.workspace === 'navigation')
 provide('keepMapOnIdle', keepMapOnIdle)
@@ -78,6 +78,7 @@ onMounted(() => {
     if (!mapBoardVisible.value && mapState.value === 'idle') return
     const first = !mapManager.map
     mapManager.processMapRaw(data)
+    mapReady.value = true
     if (first) {
       const c = mapManager.mapCenter?.() || { x: 0, y: 0 }
       if (teleop) {
@@ -154,11 +155,13 @@ watch(mapState, value => {
       return
     }
     mapBoardVisible.value = false
+    mapReady.value = false
     loadedMapName.value = ''
     mapManager.clearMap?.()
     resetTeleopPose()
   } else if (value === 'terminating') {
     keepMapOnIdle.value = false
+    mapReady.value = false
     loadedMapName.value = ''
     resetTeleopPose()
   }

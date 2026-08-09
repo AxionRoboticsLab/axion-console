@@ -26,7 +26,7 @@ function initJoyStick () {
     position: { left: '50%', top: '50%' },
     // 中心浅灰，与外圈白环一体
     color: '#BDBDBD',
-    size: 78
+    size: 52
   }).on('start end', function () {
     linearX.value = 0
     linearY.value = 0
@@ -182,7 +182,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseTurn"
         @pointercancel.prevent.stop="releaseTurn"
       >
-        <q-icon name="rotate_left" size="26px"/>
+        <q-icon name="rotate_left" size="22px"/>
       </button>
       <button
         type="button"
@@ -193,7 +193,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseTurn"
         @pointercancel.prevent.stop="releaseTurn"
       >
-        <q-icon name="rotate_right" size="26px"/>
+        <q-icon name="rotate_right" size="22px"/>
       </button>
     </div>
 
@@ -207,7 +207,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseMove"
         @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_up" size="28px"/>
+        <q-icon name="keyboard_arrow_up" size="22px"/>
       </button>
       <button
         type="button"
@@ -218,7 +218,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseMove"
         @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_left" size="28px"/>
+        <q-icon name="keyboard_arrow_left" size="22px"/>
       </button>
       <button
         type="button"
@@ -229,7 +229,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseMove"
         @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_right" size="28px"/>
+        <q-icon name="keyboard_arrow_right" size="22px"/>
       </button>
       <button
         type="button"
@@ -240,7 +240,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseMove"
         @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_down" size="28px"/>
+        <q-icon name="keyboard_arrow_down" size="22px"/>
       </button>
       <!-- 仅中心可拖，外圈白环上直接放方向箭头 -->
       <div ref="pad" class="joy-nipple"/>
@@ -268,16 +268,15 @@ onUnmounted(() => {
 <style scoped>
 .joy-unit {
   position: absolute;
-  left: 0.85rem;
-  bottom: 0.85rem;
+  /* 相对左下角略向右上挪 */
+  left: 2.75rem;
+  bottom: 2.4rem;
   z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.55rem;
   pointer-events: none;
-  transform: scale(1.12);
-  transform-origin: left bottom;
 }
 
 .joy-turn {
@@ -286,28 +285,28 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* 白底宽外环 + 中心浅灰，方向键直接画在环上 */
+/* 整体略小；灰心更小、白环更窄，比例更紧凑 */
 .joy-pad {
   position: relative;
-  width: 176px;
-  height: 176px;
+  width: 138px;
+  height: 138px;
   border-radius: 50%;
   pointer-events: none;
   background: radial-gradient(
     circle at center,
-    #D6D6D6 0 34%,
-    #ffffff 35% 100%
+    #D0D0D0 0 24%,
+    #ffffff 25% 100%
   );
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
 }
 
-/* 中心拖拽区 */
+/* 中心拖拽区（与灰心接近） */
 .joy-nipple {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 38%;
-  height: 38%;
+  width: 30%;
+  height: 30%;
   transform: translate(-50%, -50%);
   pointer-events: auto;
   z-index: 1;
@@ -328,8 +327,8 @@ onUnmounted(() => {
 }
 
 .joy-key--turn {
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.35rem;
+  height: 2.35rem;
   border-radius: 50%;
   color: rgba(33, 33, 33, 0.85);
   background: rgba(255, 255, 255, 0.96);
@@ -343,8 +342,8 @@ onUnmounted(() => {
 /* 无白色小圆包裹，箭头嵌在白环上 */
 .joy-key--dir {
   position: absolute;
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 1.9rem;
+  height: 1.9rem;
   z-index: 4;
   border-radius: 0;
   color: #424242;
@@ -357,21 +356,21 @@ onUnmounted(() => {
 
 .joy-key--up {
   left: 50%;
-  top: 8px;
+  top: 5px;
   transform: translateX(-50%);
 }
 .joy-key--down {
   left: 50%;
-  bottom: 8px;
+  bottom: 5px;
   transform: translateX(-50%);
 }
 .joy-key--left {
-  left: 8px;
+  left: 5px;
   top: 50%;
   transform: translateY(-50%);
 }
 .joy-key--right {
-  right: 8px;
+  right: 5px;
   top: 50%;
   transform: translateY(-50%);
 }

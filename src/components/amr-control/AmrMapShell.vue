@@ -43,7 +43,15 @@ provide('resetTeleopPose', resetTeleopPose)
 const navMode = ref(props.workspace === 'navigation' ? 'auto' : 'manual')
 provide('navMode', navMode)
 
+/** 与 RosMap2d 共用：是否允许画 /map；棋盘出现后才为 true */
+const mapBoardVisible = ref(props.workspace === 'navigation')
+provide('mapBoardVisible', mapBoardVisible)
+/** 已收到 OccupancyGrid 并画出棋盘 */
+const mapReady = ref(false)
+provide('mapReady', mapReady)
+
 const showJoystick = computed(() => {
+  if (!mapReady.value) return false
   if (props.workspace === 'mapping') return true
   return navMode.value === 'manual'
 })
