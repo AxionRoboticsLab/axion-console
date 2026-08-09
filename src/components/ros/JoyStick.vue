@@ -1,5 +1,4 @@
 <script setup>
-import { getCssVar } from 'quasar'
 import { inject, onMounted, onUnmounted, ref } from 'vue'
 import { useControlParams } from 'stores/control-params'
 import nipplejs from 'nipplejs'
@@ -25,8 +24,9 @@ function initJoyStick () {
     zone: pad.value,
     mode: 'static',
     position: { left: '50%', top: '50%' },
-    color: getCssVar('negative'),
-    size: 96
+    // 中心浅灰，与外圈白环一体
+    color: '#BDBDBD',
+    size: 78
   }).on('start end', function () {
     linearX.value = 0
     linearY.value = 0
@@ -182,7 +182,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseTurn"
         @pointercancel.prevent.stop="releaseTurn"
       >
-        <q-icon name="rotate_left" size="22px"/>
+        <q-icon name="rotate_left" size="26px"/>
       </button>
       <button
         type="button"
@@ -193,7 +193,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseTurn"
         @pointercancel.prevent.stop="releaseTurn"
       >
-        <q-icon name="rotate_right" size="22px"/>
+        <q-icon name="rotate_right" size="26px"/>
       </button>
     </div>
 
@@ -207,7 +207,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseMove"
         @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_up" size="20px"/>
+        <q-icon name="keyboard_arrow_up" size="28px"/>
       </button>
       <button
         type="button"
@@ -218,7 +218,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseMove"
         @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_left" size="20px"/>
+        <q-icon name="keyboard_arrow_left" size="28px"/>
       </button>
       <button
         type="button"
@@ -229,7 +229,7 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseMove"
         @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_right" size="20px"/>
+        <q-icon name="keyboard_arrow_right" size="28px"/>
       </button>
       <button
         type="button"
@@ -240,9 +240,9 @@ onUnmounted(() => {
         @pointerleave.prevent.stop="releaseMove"
         @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_down" size="20px"/>
+        <q-icon name="keyboard_arrow_down" size="28px"/>
       </button>
-      <!-- 仅中心可拖，避免挡住外圈方向键 -->
+      <!-- 仅中心可拖，外圈白环上直接放方向箭头 -->
       <div ref="pad" class="joy-nipple"/>
     </div>
   </div>
@@ -268,37 +268,46 @@ onUnmounted(() => {
 <style scoped>
 .joy-unit {
   position: absolute;
-  left: 0.75rem;
-  bottom: 0.75rem;
+  left: 0.85rem;
+  bottom: 0.85rem;
   z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.65rem;
   pointer-events: none;
+  transform: scale(1.12);
+  transform-origin: left bottom;
 }
 
 .joy-turn {
   display: flex;
-  gap: 1.75rem;
+  gap: 2.75rem;
   pointer-events: none;
 }
 
+/* 白底宽外环 + 中心浅灰，方向键直接画在环上 */
 .joy-pad {
   position: relative;
-  width: 132px;
-  height: 132px;
+  width: 176px;
+  height: 176px;
   border-radius: 50%;
   pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    #D6D6D6 0 34%,
+    #ffffff 35% 100%
+  );
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
 }
 
-/* 中心拖拽区，外圈留给方向键 */
+/* 中心拖拽区 */
 .joy-nipple {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 72px;
-  height: 72px;
+  width: 38%;
+  height: 38%;
   transform: translate(-50%, -50%);
   pointer-events: auto;
   z-index: 1;
@@ -306,7 +315,6 @@ onUnmounted(() => {
 
 .joy-key {
   border: none;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -315,59 +323,66 @@ onUnmounted(() => {
   -webkit-user-select: none;
   user-select: none;
   touch-action: none;
+  background: transparent;
+  padding: 0;
 }
 
 .joy-key--turn {
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
   color: rgba(33, 33, 33, 0.85);
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
 }
 .joy-key--turn:active {
-  background: rgba(25, 118, 210, 0.2);
+  background: rgba(25, 118, 210, 0.18);
   color: #1565c0;
 }
 
+/* 无白色小圆包裹，箭头嵌在白环上 */
 .joy-key--dir {
   position: absolute;
-  width: 1.85rem;
-  height: 1.85rem;
+  width: 2.4rem;
+  height: 2.4rem;
   z-index: 4;
-  color: #333;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  border-radius: 0;
+  color: #424242;
+  background: transparent;
+  box-shadow: none;
 }
 .joy-key--dir:active {
-  background: #1976d2;
-  color: #fff;
+  color: #1565c0;
 }
 
 .joy-key--up {
   left: 50%;
-  top: 6px;
+  top: 8px;
   transform: translateX(-50%);
 }
 .joy-key--down {
   left: 50%;
-  bottom: 6px;
+  bottom: 8px;
   transform: translateX(-50%);
 }
 .joy-key--left {
-  left: 6px;
+  left: 8px;
   top: 50%;
   transform: translateY(-50%);
 }
 .joy-key--right {
-  right: 6px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
 }
 
+/* 隐藏 nipple 自带背板色块，只用灰中心前钮 */
 .joy-nipple :deep(.back) {
-  opacity: 0.5;
+  background: transparent !important;
+  opacity: 0 !important;
 }
 .joy-nipple :deep(.front) {
-  opacity: 0.92;
+  background: #BDBDBD !important;
+  opacity: 0.95;
 }
 </style>
