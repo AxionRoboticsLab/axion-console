@@ -19,14 +19,14 @@ const angular = ref(0)
 
 const controlParams = useControlParams()
 
-/** 单一左侧手柄：大圆平移 + 上方左右旋 */
+/** 中心区拖拽平移；外圈方向键不与 nipple 抢事件 */
 function initJoyStick () {
   nipplejs.create({
     zone: pad.value,
     mode: 'static',
     position: { left: '50%', top: '50%' },
     color: getCssVar('negative'),
-    size: 148
+    size: 96
   }).on('start end', function () {
     linearX.value = 0
     linearY.value = 0
@@ -60,29 +60,37 @@ function pubVel (x, y, z) {
     publish(controlParams.cmdTopic, twist.value)
   } else if (moving) {
     moving = false
-    twist.value.linear.x = x
-    twist.value.linear.y = y
-    twist.value.angular.z = z
+    twist.value.linear.x = 0
+    twist.value.linear.y = 0
+    twist.value.angular.z = 0
     publish(controlParams.cmdTopic, twist.value)
   }
+}
+
+function applyVel () {
+  pubVel(linearX.value, linearY.value, angular.value)
 }
 
 function pressMove (dx, dy) {
   linearX.value = dx * controlParams.linearRatio
   linearY.value = dy * controlParams.linearRatio
+  applyVel()
 }
 
 function releaseMove () {
   linearX.value = 0
   linearY.value = 0
+  applyVel()
 }
 
 function pressTurn (dir) {
   angular.value = dir * controlParams.angularRatio
+  applyVel()
 }
 
 function releaseTurn () {
   angular.value = 0
+  applyVel()
 }
 
 function initKeyboardCtrl () {
@@ -92,24 +100,30 @@ function initKeyboardCtrl () {
         case 'KeyW':
         case 'ArrowUp':
           linearY.value = controlParams.linearRatio
+          applyVel()
           break
         case 'KeyS':
         case 'ArrowDown':
           linearY.value = -controlParams.linearRatio
+          applyVel()
           break
         case 'KeyA':
         case 'ArrowLeft':
           linearX.value = -controlParams.linearRatio
+          applyVel()
           break
         case 'KeyD':
         case 'ArrowRight':
           linearX.value = controlParams.linearRatio
+          applyVel()
           break
         case 'KeyJ':
           angular.value = -controlParams.angularRatio
+          applyVel()
           break
         case 'KeyL':
           angular.value = controlParams.angularRatio
+          applyVel()
           break
       }
     }
@@ -120,16 +134,19 @@ function initKeyboardCtrl () {
         case 'ArrowDown':
         case 'ArrowUp':
           linearY.value = 0
+          applyVel()
           break
         case 'KeyA':
         case 'KeyD':
         case 'ArrowLeft':
         case 'ArrowRight':
           linearX.value = 0
+          applyVel()
           break
         case 'KeyJ':
         case 'KeyL':
           angular.value = 0
+          applyVel()
           break
       }
     }
@@ -143,9 +160,7 @@ let timer
 onMounted(() => {
   initJoyStick()
   initKeyboardCtrl()
-  timer = setInterval(() => {
-    pubVel(linearX.value, linearY.value, angular.value)
-  }, controlParams.refreshInterval)
+  timer = setInterval(applyVel, controlParams.refreshInterval)
 })
 
 onUnmounted(() => {
@@ -157,16 +172,15 @@ onUnmounted(() => {
 
 <template>
   <div class="joy-unit" v-show="visible">
-    <!-- 左旋 / 右旋：在平移圆上方 -->
     <div class="joy-turn">
       <button
         type="button"
         class="joy-key joy-key--turn"
         aria-label="turn-left"
-        @pointerdown.prevent="pressTurn(-1)"
-        @pointerup.prevent="releaseTurn"
-        @pointerleave.prevent="releaseTurn"
-        @pointercancel.prevent="releaseTurn"
+        @pointerdown.prevent.stop="pressTurn(-1)"
+        @pointerup.prevent.stop="releaseTurn"
+        @pointerleave.prevent.stop="releaseTurn"
+        @pointercancel.prevent.stop="releaseTurn"
       >
         <q-icon name="rotate_left" size="22px"/>
       </button>
@@ -174,61 +188,61 @@ onUnmounted(() => {
         type="button"
         class="joy-key joy-key--turn"
         aria-label="turn-right"
-        @pointerdown.prevent="pressTurn(1)"
-        @pointerup.prevent="releaseTurn"
-        @pointerleave.prevent="releaseTurn"
-        @pointercancel.prevent="releaseTurn"
+        @pointerdown.prevent.stop="pressTurn(1)"
+        @pointerup.prevent.stop="releaseTurn"
+        @pointerleave.prevent.stop="releaseTurn"
+        @pointercancel.prevent.stop="releaseTurn"
       >
         <q-icon name="rotate_right" size="22px"/>
       </button>
     </div>
 
-    <!-- 平移大圆：方向键在外圈环带内 -->
     <div class="joy-pad">
       <button
         type="button"
         class="joy-key joy-key--dir joy-key--up"
         aria-label="up"
-        @pointerdown.prevent="pressMove(0, 1)"
-        @pointerup.prevent="releaseMove"
-        @pointerleave.prevent="releaseMove"
-        @pointercancel.prevent="releaseMove"
+        @pointerdown.prevent.stop="pressMove(0, 1)"
+        @pointerup.prevent.stop="releaseMove"
+        @pointerleave.prevent.stop="releaseMove"
+        @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_up" size="22px"/>
+        <q-icon name="keyboard_arrow_up" size="20px"/>
       </button>
       <button
         type="button"
         class="joy-key joy-key--dir joy-key--left"
         aria-label="left"
-        @pointerdown.prevent="pressMove(-1, 0)"
-        @pointerup.prevent="releaseMove"
-        @pointerleave.prevent="releaseMove"
-        @pointercancel.prevent="releaseMove"
+        @pointerdown.prevent.stop="pressMove(-1, 0)"
+        @pointerup.prevent.stop="releaseMove"
+        @pointerleave.prevent.stop="releaseMove"
+        @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_left" size="22px"/>
+        <q-icon name="keyboard_arrow_left" size="20px"/>
       </button>
       <button
         type="button"
         class="joy-key joy-key--dir joy-key--right"
         aria-label="right"
-        @pointerdown.prevent="pressMove(1, 0)"
-        @pointerup.prevent="releaseMove"
-        @pointerleave.prevent="releaseMove"
-        @pointercancel.prevent="releaseMove"
+        @pointerdown.prevent.stop="pressMove(1, 0)"
+        @pointerup.prevent.stop="releaseMove"
+        @pointerleave.prevent.stop="releaseMove"
+        @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_right" size="22px"/>
+        <q-icon name="keyboard_arrow_right" size="20px"/>
       </button>
       <button
         type="button"
         class="joy-key joy-key--dir joy-key--down"
         aria-label="down"
-        @pointerdown.prevent="pressMove(0, -1)"
-        @pointerup.prevent="releaseMove"
-        @pointerleave.prevent="releaseMove"
-        @pointercancel.prevent="releaseMove"
+        @pointerdown.prevent.stop="pressMove(0, -1)"
+        @pointerup.prevent.stop="releaseMove"
+        @pointerleave.prevent.stop="releaseMove"
+        @pointercancel.prevent.stop="releaseMove"
       >
-        <q-icon name="keyboard_arrow_down" size="22px"/>
+        <q-icon name="keyboard_arrow_down" size="20px"/>
       </button>
+      <!-- 仅中心可拖，避免挡住外圈方向键 -->
       <div ref="pad" class="joy-nipple"/>
     </div>
   </div>
@@ -260,28 +274,34 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
   pointer-events: none;
 }
 
 .joy-turn {
   display: flex;
-  gap: 0.65rem;
+  gap: 1.75rem;
   pointer-events: none;
 }
 
 .joy-pad {
   position: relative;
-  width: 168px;
-  height: 168px;
+  width: 132px;
+  height: 132px;
   border-radius: 50%;
   pointer-events: none;
 }
 
+/* 中心拖拽区，外圈留给方向键 */
 .joy-nipple {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  transform: translate(-50%, -50%);
   pointer-events: auto;
+  z-index: 1;
 }
 
 .joy-key {
@@ -290,63 +310,64 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, 0.22);
   pointer-events: auto;
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
   touch-action: none;
 }
-.joy-key:active {
-  background: rgba(255, 255, 255, 0.45);
-}
 
 .joy-key--turn {
   width: 2.35rem;
   height: 2.35rem;
-  color: rgba(33, 33, 33, 0.8);
-  background: rgba(255, 255, 255, 0.92);
+  color: rgba(33, 33, 33, 0.85);
+  background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
 }
 .joy-key--turn:active {
-  background: rgba(25, 118, 210, 0.18);
+  background: rgba(25, 118, 210, 0.2);
   color: #1565c0;
 }
 
-/* 方向键落在 nipple 外圈环带内（相对 168 圆） */
 .joy-key--dir {
   position: absolute;
-  width: 2rem;
-  height: 2rem;
-  z-index: 3;
+  width: 1.85rem;
+  height: 1.85rem;
+  z-index: 4;
+  color: #333;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
+.joy-key--dir:active {
+  background: #1976d2;
+  color: #fff;
+}
+
 .joy-key--up {
   left: 50%;
-  top: 10px;
+  top: 6px;
   transform: translateX(-50%);
 }
 .joy-key--down {
   left: 50%;
-  bottom: 10px;
+  bottom: 6px;
   transform: translateX(-50%);
 }
 .joy-key--left {
-  left: 10px;
+  left: 6px;
   top: 50%;
   transform: translateY(-50%);
 }
 .joy-key--right {
-  right: 10px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
 }
 
-/* nipple 背板略放大，与 168 外圈对齐 */
 .joy-nipple :deep(.back) {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 .joy-nipple :deep(.front) {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 </style>
