@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 
 /**
- * 巡检任务执行会话：任务页发起 → 导航页规划/画线/连跑。
+ * 巡检任务执行会话：任务页入池 → 导航页连跑 → 状态回写后端。
  */
 export const usePatrolMission = defineStore('patrol-mission', {
   state: () => ({
@@ -15,9 +15,14 @@ export const usePatrolMission = defineStore('patrol-mission', {
     runId: null,
     /** 任务原始点位（未排序） */
     points: [],
-    /** 规划后顺序 */
+    /** 规划后顺序（后端已算好时可直接用） */
     ordered: [],
+    /** true：ordered 来自后端规划，启动时不再本地重排 */
+    useServerOrder: false,
+    charge: null,
     index: -1,
+    /** 恢复执行时从该进度继续（含当前目标点） */
+    resumeIndex: -1,
     startedAt: null,
     /** planning | running | returning | paused | done | cancelled */
     phase: 'idle',
@@ -37,9 +42,35 @@ export const usePatrolMission = defineStore('patrol-mission', {
 
   actions: {
     /**
-     * 任务页点击「执行」
-     * @param {{ id, name, type, points: Array }} payload points 需含 id/name/pose 或 x,y,yaw
+     * 后端 execute / resume / next_run → 导航页接管
+     * @param {{ resume?: boolean }} opts resume=true 时从 progress_index 继续
      */
+    requestFromRun (run, opts = {}) {
+      const ordered = (run.ordered || []).map((p) => normalizePoint(p)).filter(Boolean)
+      if (!ordered.length) {
+        throw new Error('empty_points')
+      }
+      const resume = Boolean(opts.resume)
+      const progress = Number(run.progress_index ?? run.progressIndex)
+      this.pending = true
+      this.active = false
+      this.paused = false
+      this.taskId = run.task_id ?? null
+      this.taskName = run.name || run.task_name || ''
+      this.taskType = run.type || run.task_type || 'once'
+      this.runId = run.id
+      this.points = ordered
+      this.ordered = ordered
+      this.useServerOrder = true
+      this.charge = run.charge || null
+      this.index = -1
+      this.resumeIndex = resume && Number.isFinite(progress) ? progress : -1
+      this.returning = false
+      this.startedAt = run.startedAt || new Date().toISOString().slice(0, 19).replace('T', ' ')
+      this.phase = 'planning'
+    },
+
+    /** @deprecated 兼容旧本地执行 */
     requestExecute (payload) {
       const points = (payload.points || []).map((p) => normalizePoint(p)).filter(Boolean)
       if (!points.length) {
@@ -51,9 +82,11 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.taskId = payload.id ?? null
       this.taskName = payload.name || ''
       this.taskType = payload.type || 'once'
-      this.runId = Date.now()
+      this.runId = payload.runId ?? Date.now()
       this.points = points
       this.ordered = []
+      this.useServerOrder = false
+      this.charge = payload.charge || null
       this.index = -1
       this.startedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
       this.phase = 'planning'
@@ -69,7 +102,9 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.paused = false
       this.returning = false
       this.phase = 'running'
-      this.index = -1
+      const resumeAt = this.resumeIndex
+      this.resumeIndex = -1
+      this.index = Number.isFinite(resumeAt) && resumeAt >= 0 ? resumeAt : -1
     },
 
     setIndex (i) {
@@ -98,6 +133,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.pending = false
       this.paused = false
       this.returning = false
+      this.useServerOrder = false
       this.phase = ok ? 'done' : 'cancelled'
     },
 
@@ -115,7 +151,10 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.runId = null
       this.points = []
       this.ordered = []
+      this.useServerOrder = false
+      this.charge = null
       this.index = -1
+      this.resumeIndex = -1
       this.startedAt = null
       this.phase = 'idle'
       this.returning = false

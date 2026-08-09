@@ -6,6 +6,7 @@ import { Notify } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getChargePoint } from 'src/api/maps'
+import { patrolRunAction } from 'src/api/patrol-tasks'
 import { usePatrolMission } from 'stores/patrol-mission'
 import { buildTourPolyline, planPatrolOrder } from 'src/utils/patrol-route'
 
@@ -153,6 +154,10 @@ function drawTour (start, ordered) {
 }
 
 async function ensureChargePoint () {
+  if (mission.charge) {
+    chargePoint.value = mission.charge
+    return chargePoint.value
+  }
   const mapId = loadedMapId?.value
   if (!mapId) {
     chargePoint.value = null
@@ -167,12 +172,34 @@ async function ensureChargePoint () {
   return chargePoint.value
 }
 
-function finishMissionOk (msgKey) {
+async function syncRunAction (action, extra = {}) {
+  if (!mission.runId || typeof mission.runId !== 'number') return null
+  try {
+    return await patrolRunAction(mission.runId, action, extra)
+  } catch (e) {
+    console.warn('[PatrolMission] run action failed', action, e)
+    return null
+  }
+}
+
+function takeNextRun (resp) {
+  const next = resp?.next_run || resp?.nextRun
+  if (!next?.id) return
+  try {
+    mission.requestFromRun(next)
+  } catch (e) {
+    console.warn('[PatrolMission] claim next run failed', e)
+  }
+}
+
+async function finishMissionOk (msgKey) {
   returningHome.value = false
+  const resp = await syncRunAction('complete', { result_ok: true, progress_index: mission.index })
   mission.complete(true)
   mapManager?.clearPatrolTour?.()
   mapManager?.clearNavPlan?.()
   Notify.create({ type: 'positive', message: t(msgKey) })
+  takeNextRun(resp)
 }
 
 function beginReturnHome () {
@@ -204,6 +231,7 @@ function advance () {
     return
   }
   mission.setIndex(next)
+  void syncRunAction('progress', { progress_index: next })
   const point = mission.ordered[next]
   publishGoal(point)
   Notify.create({
@@ -227,8 +255,30 @@ async function tryStartPending () {
   const start = resolveStart()
   if (!start) return
 
-  const ordered = planPatrolOrder(start, mission.points)
-  mission.setOrdered(ordered)
+  let ordered
+  if (mission.useServerOrder && mission.ordered.length) {
+    ordered = mission.ordered
+  } else {
+    ordered = planPatrolOrder(start, mission.points)
+    mission.setOrdered(ordered)
+  }
+
+  // 用真实位姿回写规划（便于任务结果核对）
+  if (typeof mission.runId === 'number') {
+    void syncRunAction('replan', {
+      start_x: start.x,
+      start_y: start.y,
+      start_yaw: start.yaw || 0,
+      ordered: ordered.map((p) => ({
+        id: p.id,
+        name: p.name,
+        x: p.x,
+        y: p.y,
+        yaw: p.yaw || 0
+      }))
+    })
+  }
+
   drawTour(start, ordered)
   mission.beginRunning()
   returningHome.value = false
@@ -243,7 +293,12 @@ async function tryStartPending () {
     })
   })
 
-  setTimeout(() => advance(), 280)
+  // 恢复：继续当前目标点；新建：从第一个点开始
+  if (mission.index >= 0 && mission.index < ordered.length) {
+    publishGoal(ordered[mission.index])
+  } else {
+    setTimeout(() => advance(), 280)
+  }
 }
 
 async function resumeActiveUi () {
@@ -255,12 +310,24 @@ async function resumeActiveUi () {
   startedRunId = mission.runId
 }
 
-function stopMission () {
+async function pauseMission () {
+  mission.pause()
+  await syncRunAction('pause')
+}
+
+async function resumeMission () {
+  mission.resume()
+  await syncRunAction('resume')
+}
+
+async function stopMission () {
   returningHome.value = false
+  const resp = await syncRunAction('cancel')
   mission.cancel()
   mapManager?.clearPatrolTour?.()
   mapManager?.clearNavPlan?.()
   Notify.create({ type: 'info', message: t('patrol_run_stopped') })
+  takeNextRun(resp)
 }
 
 watch(
@@ -313,20 +380,20 @@ defineExpose({ stopMission, tryStartPending, ensureChargePoint })
         <template v-else>
           {{ $t('patrol_run_progress', { i: Math.max(1, mission.index + 1), n: mission.ordered.length }) }}
         </template>
-        <span v-if="mission.paused"> · {{ $t('patrol_task_status_waiting') }}</span>
+        <span v-if="mission.paused"> · {{ $t('patrol_task_status_paused') }}</span>
       </div>
     </div>
     <q-btn
       v-if="!mission.paused"
       dense unelevated color="warning" text-color="dark"
       icon="pause" :label="$t('patrol_task_pause')"
-      @click="mission.pause()"
+      @click="pauseMission"
     />
     <q-btn
       v-else
       dense unelevated color="positive"
-      icon="play_arrow" :label="$t('patrol_task_execute')"
-      @click="mission.resume()"
+      icon="play_arrow" :label="$t('patrol_task_resume')"
+      @click="resumeMission"
     />
     <q-btn
       dense unelevated color="negative"
