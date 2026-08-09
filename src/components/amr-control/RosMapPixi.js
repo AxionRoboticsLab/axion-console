@@ -1,6 +1,6 @@
 import { getCssVar } from 'quasar'
 import { useControlParams } from 'stores/control-params'
-import { Application, Sprite, Container, Texture, Graphics, Text, Assets, BufferImageSource } from 'pixi.js'
+import { Application, Sprite, Container, Texture, Graphics, Assets, BufferImageSource } from 'pixi.js'
 
 const controlParam = useControlParams()
 
@@ -272,7 +272,7 @@ export default function () {
     return mapRender.pose
   }
 
-  /** 目标点：圆点 + Target 文字（非箭头） */
+  /** 目标点：绿色圆点（无文字、无十字） */
   mapRender.updateTargetPose = (pose) => {
     if (!pose?.position || !mapRender.app) return
     const x = pose.position.x
@@ -287,32 +287,11 @@ export default function () {
     }
     const g = new Container()
     const mark = new Graphics()
-    mark.circle(0, 0, 0.12)
+    mark.circle(0, 0, 0.14)
     mark.fill({ color: 0x21BA45, alpha: 0.95 })
-    mark.circle(0, 0, 0.22)
-    mark.stroke({ width: 0.045, color: 0x21BA45, alpha: 1 })
-    // 十字准星
-    mark.moveTo(-0.32, 0)
-    mark.lineTo(0.32, 0)
-    mark.moveTo(0, -0.32)
-    mark.lineTo(0, 0.32)
-    mark.stroke({ width: 0.035, color: 0x1B5E20, alpha: 0.9 })
+    mark.circle(0, 0, 0.2)
+    mark.stroke({ width: 0.04, color: 0x21BA45, alpha: 0.85 })
     g.addChild(mark)
-
-    const label = new Text({
-      text: 'Target',
-      style: {
-        fontFamily: 'Arial, sans-serif',
-        fontSize: 28,
-        fontWeight: '700',
-        fill: 0x1B5E20
-      }
-    })
-    label.anchor.set(0.5, 1)
-    label.scale.set(0.012)
-    label.position.set(0, -0.38)
-    g.addChild(label)
-
     g.position.set(x, -y)
     mapRender.addToWorld(g)
     mapRender.target = g
@@ -396,7 +375,10 @@ export default function () {
     await app.init({
       background: '#FFFFFF',
       resizeTo: option.canvas,
-      canvas: option.canvas
+      canvas: option.canvas,
+      antialias: true,
+      resolution: Math.min(window.devicePixelRatio || 1, 2),
+      autoDensity: true
     })
     mapRender.app = app
     mapRender.ensureLayers()
@@ -762,13 +744,57 @@ export default function () {
     return { done, remain }
   }
 
+  /** Chaikin 圆角，减弱折线锯齿感 */
+  mapRender.smoothPath = (pts, iterations = 2) => {
+    if (!pts || pts.length < 2) return pts || []
+    let cur = pts
+    for (let n = 0; n < iterations; n++) {
+      if (cur.length < 2) break
+      const next = [{ x: cur[0].x, y: cur[0].y }]
+      for (let i = 0; i < cur.length - 1; i++) {
+        const p = cur[i]
+        const q = cur[i + 1]
+        next.push({
+          x: 0.75 * p.x + 0.25 * q.x,
+          y: 0.75 * p.y + 0.25 * q.y
+        })
+        next.push({
+          x: 0.25 * p.x + 0.75 * q.x,
+          y: 0.25 * p.y + 0.75 * q.y
+        })
+      }
+      next.push({ x: cur[cur.length - 1].x, y: cur[cur.length - 1].y })
+      cur = next
+    }
+    return cur
+  }
+
   mapRender.strokePoly = (gfx, pts, color, width = 0.07, alpha = 1) => {
     if (!pts || pts.length < 2) return
-    gfx.moveTo(pts[0].x, -pts[0].y)
-    for (let i = 1; i < pts.length; i++) {
-      gfx.lineTo(pts[i].x, -pts[i].y)
+    const smooth = mapRender.smoothPath(pts, 2)
+    const draw = () => {
+      gfx.moveTo(smooth[0].x, -smooth[0].y)
+      for (let i = 1; i < smooth.length; i++) {
+        gfx.lineTo(smooth[i].x, -smooth[i].y)
+      }
     }
-    gfx.stroke({ width, color, alpha })
+    // 软边底层 + 圆角描边，降低对角线锯齿
+    draw()
+    gfx.stroke({
+      width: width * 2.2,
+      color,
+      alpha: alpha * 0.22,
+      cap: 'round',
+      join: 'round'
+    })
+    draw()
+    gfx.stroke({
+      width,
+      color,
+      alpha,
+      cap: 'round',
+      join: 'round'
+    })
   }
 
   /** 已走灰 / 未走主题色，随机器人位置刷新 */
@@ -788,9 +814,9 @@ export default function () {
 
     const layer = new Graphics()
     // 已走过：灰色
-    mapRender.strokePoly(layer, done, 0x9E9E9E, 0.08, 0.95)
+    mapRender.strokePoly(layer, done, 0x9E9E9E, 0.07, 0.95)
     // 未走完：蓝色高亮
-    mapRender.strokePoly(layer, remain, 0x1976D2, 0.09, 1)
+    mapRender.strokePoly(layer, remain, 0x1976D2, 0.08, 1)
 
     if (mapRender.path?.parent) {
       mapRender.path.parent.removeChild(mapRender.path)
