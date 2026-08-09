@@ -11,26 +11,30 @@ async function unwrap (promise) {
   return body.data
 }
 
+/** 不传 mapId 则返回全部地图上的任务 */
 export function listPatrolTasks (mapId) {
   const params = {}
   if (mapId != null) params.map_id = mapId
   return unwrap(api.get('/patrol_tasks', { params })).then((data) => data || [])
 }
 
-export function createPatrolTask ({ mapId, name, type = 'once', pointIds }) {
+export function createPatrolTask ({ mapId, name, type = 'once', pointIds, config }) {
   return unwrap(api.post('/patrol_tasks', {
     map_id: mapId,
     name,
     type,
-    point_ids: pointIds
+    point_ids: pointIds,
+    config: config || {}
   }))
 }
 
-export function updatePatrolTask (taskId, { name, type, pointIds }) {
+export function updatePatrolTask (taskId, { name, type, pointIds, mapId, config }) {
   const body = {}
   if (name != null) body.name = name
   if (type != null) body.type = type
   if (pointIds != null) body.point_ids = pointIds
+  if (mapId != null) body.map_id = mapId
+  if (config != null) body.config = config
   return unwrap(api.patch(`/patrol_tasks/${taskId}`, body))
 }
 
@@ -67,8 +71,4 @@ export function patrolRunAction (runId, action, extra = {}) {
     action,
     ...extra
   }))
-}
-
-export function deletePatrolRun (runId) {
-  return unwrap(api.delete(`/patrol_tasks/runs/${runId}`))
 }

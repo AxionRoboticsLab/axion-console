@@ -22,6 +22,14 @@
             <q-btn color="primary" unelevated icon="add" :label="t('patrol_task_create')" @click="openCreate"/>
             <q-btn flat class="q-ml-sm" icon="refresh" :label="t('patrol_task_reset')" @click="reloadTasks"/>
           </template>
+          <template #body-cell-mapName="props">
+            <q-td :props="props">
+              <span>{{ props.row.mapName || '—' }}</span>
+              <q-badge v-if="props.row.mapId === activeMapId" color="teal" class="q-ml-xs" dense>
+                {{ t('patrol_task_map_current') }}
+              </q-badge>
+            </q-td>
+          </template>
           <template #body-cell-pointNames="props">
             <q-td :props="props">
               <q-chip
@@ -33,11 +41,25 @@
               </q-chip>
             </q-td>
           </template>
+          <template #body-cell-typeExtra="props">
+            <q-td :props="props">
+              <span class="text-caption text-grey-8">{{ typeExtraLabel(props.row) }}</span>
+            </q-td>
+          </template>
           <template #body-cell-actions="props">
             <q-td :props="props">
               <q-btn flat dense color="primary" icon="edit" :label="t('patrol_task_edit')" @click="openEdit(props.row)"/>
               <q-btn flat dense color="negative" icon="delete" :label="t('patrol_task_delete')" @click="removeTask(props.row)"/>
-              <q-btn flat dense color="positive" icon="play_arrow" :label="t('patrol_task_execute')" @click="executeTask(props.row)"/>
+              <q-btn
+                flat dense color="positive" icon="play_arrow"
+                :label="t('patrol_task_execute')"
+                :disable="!canExecute(props.row)"
+                @click="executeTask(props.row)"
+              >
+                <q-tooltip v-if="!canExecute(props.row)">
+                  {{ t('patrol_task_execute_map_mismatch') }}
+                </q-tooltip>
+              </q-btn>
             </q-td>
           </template>
         </AppDataTable>
@@ -145,10 +167,10 @@
                 @click="cancelRun(props.row)"
               />
               <q-btn
-                v-if="canDeleteRun(props.row)"
-                flat dense color="grey-8" icon="delete"
-                :label="t('patrol_task_delete')"
-                @click="removeRun(props.row)"
+                v-if="canViewReport(props.row)"
+                flat dense color="primary" icon="description"
+                :label="t('patrol_task_report')"
+                @click="openReport(props.row)"
               />
             </q-td>
           </template>
@@ -156,32 +178,171 @@
       </q-tab-panel>
     </q-tab-panels>
 
+    <!-- 新建 / 编辑 -->
     <q-dialog v-model="formOpen" persistent>
-      <q-card style="min-width: 28rem; max-width: 36rem">
+      <q-card style="min-width: 30rem; max-width: 40rem">
         <q-card-section class="text-h6">
           {{ editingId ? t('patrol_task_edit') : t('patrol_task_create') }}
         </q-card-section>
         <q-card-section class="q-gutter-md">
           <q-input v-model="form.name" outlined dense :label="t('patrol_task_name')"/>
           <q-select
+            v-model="form.mapId"
+            outlined dense emit-value map-options
+            :options="mapOptions"
+            :loading="pointsLoading"
+            :label="t('patrol_task_map')"
+            :disable="Boolean(editingId)"
+            @update:model-value="onFormMapChange"
+          />
+          <q-select
             v-model="form.type"
             outlined dense emit-value map-options
             :options="typeOptions"
             :label="t('patrol_task_type')"
           />
+
+          <template v-if="form.type === 'loop'">
+            <q-input
+              v-model.number="form.loopCount"
+              outlined dense type="number" min="0"
+              :label="t('patrol_task_loop_count')"
+              :hint="t('patrol_task_loop_count_hint')"
+            />
+            <q-input
+              v-model.number="form.loopIntervalSec"
+              outlined dense type="number" min="0"
+              :label="t('patrol_task_loop_interval')"
+              :hint="t('patrol_task_loop_interval_hint')"
+            />
+          </template>
+
+          <template v-if="form.type === 'schedule'">
+            <q-input
+              v-model="form.scheduleTime"
+              outlined dense mask="##:##"
+              :label="t('patrol_task_schedule_time')"
+              :hint="t('patrol_task_schedule_time_hint')"
+            >
+              <template #append>
+                <q-icon name="access_time" class="cursor-pointer">
+                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                    <q-time v-model="form.scheduleTime" format24h>
+                      <div class="row items-center justify-end q-gutter-sm q-pa-sm">
+                        <q-btn v-close-popup :label="t('ok')" color="primary" flat/>
+                      </div>
+                    </q-time>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
+            <q-input
+              v-model="form.scheduleOnceAt"
+              outlined dense clearable
+              :label="t('patrol_task_schedule_once')"
+              :hint="t('patrol_task_schedule_once_hint')"
+            >
+              <template #append>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                    <q-date v-model="form.scheduleOnceAt" mask="YYYY-MM-DD HH:mm">
+                      <div class="row items-center justify-end q-gutter-sm q-pa-sm">
+                        <q-btn v-close-popup :label="t('ok')" color="primary" flat/>
+                      </div>
+                    </q-date>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
+          </template>
+
           <q-select
             v-model="form.pointIds"
             outlined dense multiple emit-value map-options use-chips
-            :options="pointOptions"
+            :options="formPointOptions"
             :loading="pointsLoading"
             :label="t('patrol_task_points')"
-            :hint="activeMapLabel"
+            :hint="formMapHint"
           />
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat :label="t('cancel')" v-close-popup/>
           <q-btn color="primary" unelevated :loading="saving" :label="t('ok')" @click="saveTask"/>
         </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- 执行报告 -->
+    <q-dialog v-model="reportOpen">
+      <q-card style="min-width: min(36rem, 94vw); max-width: 40rem">
+        <q-card-section class="row items-center no-wrap">
+          <div class="text-h6 col">{{ t('patrol_task_report_title') }}</div>
+          <q-btn flat round dense icon="close" v-close-popup/>
+        </q-card-section>
+        <q-separator/>
+        <q-card-section v-if="report" class="q-gutter-md" style="max-height: 70vh; overflow: auto">
+          <div class="text-subtitle2">{{ t('patrol_task_report_summary') }}</div>
+          <q-list dense bordered class="rounded-borders">
+            <q-item>
+              <q-item-section>{{ t('patrol_task_name') }}</q-item-section>
+              <q-item-section side>{{ report.summary?.name || '—' }}</q-item-section>
+            </q-item>
+            <q-item>
+              <q-item-section>{{ t('patrol_task_exec_id') }}</q-item-section>
+              <q-item-section side class="text-caption">{{ report.summary?.exec_id || '—' }}</q-item-section>
+            </q-item>
+            <q-item>
+              <q-item-section>{{ t('patrol_task_map') }}</q-item-section>
+              <q-item-section side>{{ report.summary?.map_name || '—' }}</q-item-section>
+            </q-item>
+            <q-item>
+              <q-item-section>{{ t('patrol_task_status') }}</q-item-section>
+              <q-item-section side>
+                <q-badge :color="statusColor(report.summary?.status)">{{ statusLabel(report.summary?.status) }}</q-badge>
+              </q-item-section>
+            </q-item>
+            <q-item>
+              <q-item-section>{{ t('patrol_task_result') }}</q-item-section>
+              <q-item-section side>
+                <template v-if="report.summary?.result">
+                  <q-badge :color="report.summary.result === 'success' ? 'positive' : 'negative'">
+                    {{ resultLabel(report.summary.result) }}
+                  </q-badge>
+                </template>
+                <span v-else>—</span>
+              </q-item-section>
+            </q-item>
+            <q-item>
+              <q-item-section>{{ t('patrol_task_exec_time') }}</q-item-section>
+              <q-item-section side class="text-right text-caption">
+                <div>{{ report.summary?.startedAt || '—' }}</div>
+                <div>~ {{ report.summary?.endedAt || '—' }}</div>
+              </q-item-section>
+            </q-item>
+            <q-item>
+              <q-item-section>{{ t('patrol_task_report_progress') }}</q-item-section>
+              <q-item-section side>{{ report.summary?.progress || '—' }}</q-item-section>
+            </q-item>
+          </q-list>
+
+          <div class="text-subtitle2">{{ t('patrol_task_route') }}</div>
+          <div class="text-body2">
+            {{ (report.route || []).join(' → ') || '—' }}
+            <span v-if="report.charge"> → {{ t('charge_point') }}</span>
+          </div>
+
+          <div class="text-subtitle2">{{ t('patrol_task_report_timeline') }}</div>
+          <q-timeline color="primary" dense>
+            <q-timeline-entry
+              v-for="(ev, idx) in (report.timeline || [])"
+              :key="idx"
+              :title="ev.label"
+              :subtitle="ev.t || ''"
+              :color="timelineColor(ev.event)"
+              :icon="timelineIcon(ev.event)"
+            />
+          </q-timeline>
+        </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
@@ -196,9 +357,9 @@ import AppDataTable from 'components/common/AppDataTable.vue'
 import { getChargePoint, listMaps, listPatrolPoints } from 'src/api/maps'
 import {
   createPatrolTask,
-  deletePatrolRun,
   deletePatrolTask,
   executePatrolTask,
+  getPatrolRun,
   listPatrolRuns,
   listPatrolTasks,
   patrolRunAction,
@@ -214,7 +375,9 @@ const router = useRouter()
 const mission = usePatrolMission()
 const tab = ref('list')
 
-const pointCatalog = ref([])
+const mapCatalog = ref([])
+const formPointCatalog = ref([])
+const pointNameCache = ref({})
 const activeMapId = ref(null)
 const activeMapName = ref('')
 const pointsLoading = ref(false)
@@ -222,13 +385,21 @@ const tasksLoading = ref(false)
 const runsLoading = ref(false)
 const saving = ref(false)
 
-const pointOptions = computed(() =>
-  pointCatalog.value.map((p) => ({ label: p.name, value: p.id }))
+const mapOptions = computed(() =>
+  mapCatalog.value.map((m) => ({
+    label: m.status === 1 ? `${m.map_name} (${t('patrol_task_map_current')})` : m.map_name,
+    value: m.id
+  }))
 )
 
-const activeMapLabel = computed(() => {
-  if (!activeMapName.value) return t('patrol_need_map')
-  return t('amr2d_loadMap_current', { name: activeMapName.value })
+const formPointOptions = computed(() =>
+  formPointCatalog.value.map((p) => ({ label: p.name, value: p.id }))
+)
+
+const formMapHint = computed(() => {
+  const m = mapCatalog.value.find((x) => x.id === form.value.mapId)
+  if (!m) return t('patrol_need_map')
+  return t('amr2d_loadMap_current', { name: m.map_name })
 })
 
 const typeOptions = computed(() => [
@@ -252,15 +423,16 @@ const resultOptions = computed(() => [
 
 const tasks = ref([])
 const runs = ref([])
-
 const taskPagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
 const resultPagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
 
 const taskColumns = computed(() => [
   { name: 'name', label: t('patrol_task_name'), field: 'name', align: 'left' },
+  { name: 'mapName', label: t('patrol_task_map'), field: 'mapName', align: 'left' },
   { name: 'type', label: t('patrol_task_type'), field: (r) => typeLabel(r.type), align: 'left' },
+  { name: 'typeExtra', label: t('patrol_task_type_params'), field: 'typeExtra', align: 'left' },
   { name: 'pointNames', label: t('patrol_task_points'), field: 'pointNames', align: 'left' },
-  { name: 'actions', label: t('patrol_task_actions'), field: 'actions', align: 'left' }
+  { name: 'actions', label: t('patrol_task_actions'), field: 'actions', align: 'left', style: 'min-width: 14rem' }
 ])
 
 const resultColumns = computed(() => [
@@ -273,29 +445,33 @@ const resultColumns = computed(() => [
   { name: 'actions', label: t('patrol_task_actions'), field: 'actions', align: 'left', style: 'min-width: 12rem' }
 ])
 
-function canDeleteRun (row) {
-  const s = row?.status
-  // 待执行 / 执行中 / 暂停：不可删
-  if (s === 'waiting' || s === 'running' || s === 'paused') return false
-  return s === 'done' || s === 'cancelled' || Boolean(row?.result)
-}
-
 function normalizeTask (row) {
+  const cfg = row.config || {}
   return {
     id: row.id,
     name: row.name,
     type: row.type || row.task_type || 'once',
     pointIds: row.point_ids || row.pointIds || [],
-    mapId: row.map_id ?? row.mapId
+    mapId: row.map_id ?? row.mapId,
+    mapName: row.map_name || row.mapName || '',
+    config: cfg,
+    loopCount: cfg.loop_count ?? 0,
+    loopIntervalSec: cfg.loop_interval_sec ?? 0,
+    scheduleTime: cfg.schedule_time || '',
+    scheduleOnceAt: cfg.schedule_once_at || ''
   }
 }
 
-function pointNamesOf (ids) {
-  return (ids || []).map((id) => pointCatalog.value.find((p) => p.id === id)?.name || String(id))
+function pointNamesOf (ids, mapId) {
+  const cache = pointNameCache.value[mapId] || {}
+  return (ids || []).map((id) => cache[id] || formPointCatalog.value.find((p) => p.id === id)?.name || String(id))
 }
 
 const taskRows = computed(() =>
-  tasks.value.map((row) => ({ ...row, pointNames: pointNamesOf(row.pointIds) }))
+  tasks.value.map((row) => ({
+    ...row,
+    pointNames: pointNamesOf(row.pointIds, row.mapId)
+  }))
 )
 
 const resultFilters = ref({ name: '', status: null, result: null, range: null })
@@ -303,8 +479,25 @@ const resultFilters = ref({ name: '', status: null, result: null, range: null })
 function typeLabel (v) {
   return typeOptions.value.find((o) => o.value === v)?.label || v
 }
+function typeExtraLabel (row) {
+  if (row.type === 'loop') {
+    const n = row.loopCount ?? 0
+    const iv = row.loopIntervalSec ?? 0
+    return t('patrol_task_loop_summary', {
+      n: n === 0 ? t('patrol_task_loop_forever') : String(n),
+      sec: iv
+    })
+  }
+  if (row.type === 'schedule') {
+    const parts = []
+    if (row.scheduleTime) parts.push(t('patrol_task_schedule_daily', { time: row.scheduleTime }))
+    if (row.scheduleOnceAt) parts.push(t('patrol_task_schedule_once_at', { at: row.scheduleOnceAt }))
+    return parts.join(' · ') || '—'
+  }
+  return '—'
+}
 function statusLabel (v) {
-  return statusOptions.value.find((o) => o.value === v)?.label || v
+  return statusOptions.value.find((o) => o.value === v)?.label || v || '—'
 }
 function resultLabel (v) {
   return resultOptions.value.find((o) => o.value === v)?.label || v
@@ -326,6 +519,27 @@ function shortExecId (id) {
   if (!id) return '—'
   return id.length > 14 ? `${id.slice(0, 10)}…` : id
 }
+function canExecute (row) {
+  return Boolean(activeMapId.value && row.mapId === activeMapId.value)
+}
+function canViewReport (row) {
+  return row.status === 'done' || row.status === 'cancelled' || Boolean(row.result)
+}
+function timelineColor (ev) {
+  if (ev === 'done' || ev === 'arrived' || ev === 'return_charge') return 'positive'
+  if (ev === 'fail' || ev === 'cancelled') return 'negative'
+  if (ev === 'pending') return 'grey'
+  return 'primary'
+}
+function timelineIcon (ev) {
+  if (ev === 'started') return 'play_arrow'
+  if (ev === 'arrived') return 'flag'
+  if (ev === 'return_charge') return 'battery_charging_full'
+  if (ev === 'done') return 'check_circle'
+  if (ev === 'fail') return 'error'
+  if (ev === 'cancelled') return 'cancel'
+  return 'radio_button_unchecked'
+}
 
 function onTaskRequest (req) {
   taskPagination.value = { ...taskPagination.value, ...req.pagination, rowsNumber: tasks.value.length }
@@ -334,35 +548,47 @@ function onResultRequest (req) {
   resultPagination.value = { ...resultPagination.value, ...req.pagination, rowsNumber: runs.value.length }
 }
 
-async function loadPointCatalog () {
+async function loadMapsAndActive () {
+  const maps = await listMaps()
+  mapCatalog.value = maps || []
+  const active = (maps || []).find((m) => m.status === 1) || (maps || [])[0]
+  activeMapId.value = active?.id ?? null
+  activeMapName.value = active?.map_name || ''
+  return active
+}
+
+async function loadPointsForMap (mapId) {
+  if (!mapId) {
+    formPointCatalog.value = []
+    return
+  }
   pointsLoading.value = true
   try {
-    const maps = await listMaps()
-    const active = (maps || []).find((m) => m.status === 1) || (maps || [])[0]
-    if (!active) {
-      pointCatalog.value = []
-      activeMapId.value = null
-      activeMapName.value = ''
-      return
-    }
-    activeMapId.value = active.id
-    activeMapName.value = active.map_name
-    const rows = await listPatrolPoints(active.id)
-    pointCatalog.value = rows || []
-  } catch (e) {
-    console.warn('[patrol-tasks] load points failed', e)
-    Notify.create({ type: 'warning', message: e.message || t('patrol_empty') })
+    const rows = await listPatrolPoints(mapId)
+    formPointCatalog.value = rows || []
+    const cache = { ...(pointNameCache.value[mapId] || {}) }
+    for (const p of rows || []) cache[p.id] = p.name
+    pointNameCache.value = { ...pointNameCache.value, [mapId]: cache }
   } finally {
     pointsLoading.value = false
   }
 }
 
+async function onFormMapChange (mapId) {
+  form.value.pointIds = []
+  await loadPointsForMap(mapId)
+}
+
 async function reloadTasks () {
   tasksLoading.value = true
   try {
-    await loadPointCatalog()
-    const rows = await listPatrolTasks(activeMapId.value || undefined)
+    await loadMapsAndActive()
+    // 列出全部地图任务；执行按钮按当前地图禁用
+    const rows = await listPatrolTasks()
     tasks.value = (rows || []).map(normalizeTask)
+    // 预取各任务地图点位名
+    const mapIds = [...new Set(tasks.value.map((r) => r.mapId).filter(Boolean))]
+    await Promise.all(mapIds.map((id) => loadPointsForMap(id)))
     taskPagination.value.rowsNumber = tasks.value.length
   } catch (e) {
     Notify.create({ type: 'negative', message: e.message || t('patrol_task_load_failed') })
@@ -374,9 +600,10 @@ async function reloadTasks () {
 async function reloadRuns () {
   runsLoading.value = true
   try {
+    if (!activeMapId.value) await loadMapsAndActive()
     const f = resultFilters.value
+    // 结果列表看全部（不按地图过滤），便于跨图审计
     const rows = await listPatrolRuns({
-      mapId: activeMapId.value || undefined,
       name: f.name || undefined,
       status: f.status || undefined,
       result: f.result || undefined,
@@ -386,7 +613,8 @@ async function reloadRuns () {
     runs.value = (rows || []).map((r) => ({
       ...r,
       execId: r.exec_id || r.execId || '',
-      name: r.name || r.task_name || ''
+      name: r.name || r.task_name || '',
+      report: r.report || null
     }))
     resultPagination.value.rowsNumber = runs.value.length
   } catch (e) {
@@ -408,18 +636,62 @@ watch(tab, (v) => {
 
 const formOpen = ref(false)
 const editingId = ref(null)
-const form = ref({ name: '', type: 'once', pointIds: [] })
+const form = ref(emptyForm())
+
+function emptyForm () {
+  return {
+    name: '',
+    type: 'once',
+    mapId: null,
+    pointIds: [],
+    loopCount: 0,
+    loopIntervalSec: 0,
+    scheduleTime: '08:00',
+    scheduleOnceAt: ''
+  }
+}
+
+function buildConfig (f) {
+  if (f.type === 'loop') {
+    return {
+      loop_count: Number(f.loopCount) || 0,
+      loop_interval_sec: Number(f.loopIntervalSec) || 0
+    }
+  }
+  if (f.type === 'schedule') {
+    return {
+      schedule_time: (f.scheduleTime || '').trim(),
+      schedule_once_at: (f.scheduleOnceAt || '').trim() || null
+    }
+  }
+  return {}
+}
 
 async function openCreate () {
-  await loadPointCatalog()
+  await loadMapsAndActive()
   editingId.value = null
-  form.value = { name: '', type: 'once', pointIds: [] }
+  form.value = {
+    ...emptyForm(),
+    mapId: activeMapId.value
+  }
+  await loadPointsForMap(form.value.mapId)
   formOpen.value = true
 }
+
 async function openEdit (row) {
-  await loadPointCatalog()
+  await loadMapsAndActive()
   editingId.value = row.id
-  form.value = { name: row.name, type: row.type, pointIds: [...row.pointIds] }
+  form.value = {
+    name: row.name,
+    type: row.type,
+    mapId: row.mapId,
+    pointIds: [...row.pointIds],
+    loopCount: row.loopCount ?? 0,
+    loopIntervalSec: row.loopIntervalSec ?? 0,
+    scheduleTime: row.scheduleTime || '08:00',
+    scheduleOnceAt: row.scheduleOnceAt || ''
+  }
+  await loadPointsForMap(form.value.mapId)
   formOpen.value = true
 }
 
@@ -428,28 +700,36 @@ async function saveTask () {
     Notify.create({ type: 'warning', message: t('patrol_task_name_required') })
     return
   }
+  if (!form.value.mapId) {
+    Notify.create({ type: 'warning', message: t('patrol_need_map') })
+    return
+  }
   if (!form.value.pointIds?.length) {
     Notify.create({ type: 'warning', message: t('patrol_task_points_required') })
     return
   }
-  if (!activeMapId.value) {
-    Notify.create({ type: 'warning', message: t('patrol_need_map') })
+  if (form.value.type === 'schedule' && !form.value.scheduleTime && !form.value.scheduleOnceAt) {
+    Notify.create({ type: 'warning', message: t('patrol_task_schedule_required') })
     return
   }
   saving.value = true
   try {
+    const config = buildConfig(form.value)
     if (editingId.value) {
       await updatePatrolTask(editingId.value, {
         name: form.value.name.trim(),
         type: form.value.type,
-        pointIds: [...form.value.pointIds]
+        pointIds: [...form.value.pointIds],
+        mapId: form.value.mapId,
+        config
       })
     } else {
       await createPatrolTask({
-        mapId: activeMapId.value,
+        mapId: form.value.mapId,
         name: form.value.name.trim(),
         type: form.value.type,
-        pointIds: [...form.value.pointIds]
+        pointIds: [...form.value.pointIds],
+        config
       })
     }
     formOpen.value = false
@@ -479,23 +759,28 @@ function removeTask (row) {
   })
 }
 
-async function resolveStartPose () {
-  // 优先充电点（返航基地）作为规划起点；否则用地图上第一个点近似
-  if (activeMapId.value) {
+async function resolveStartPose (mapId) {
+  const mid = mapId || activeMapId.value
+  if (mid) {
     try {
-      const charge = await getChargePoint(activeMapId.value)
+      const charge = await getChargePoint(mid)
       if (charge) return { x: charge.x, y: charge.y, yaw: charge.yaw || 0 }
     } catch (_) { /* ignore */ }
   }
-  const first = pointCatalog.value[0]
+  await loadPointsForMap(mid)
+  const first = formPointCatalog.value[0]
   if (first) return { x: first.x, y: first.y, yaw: first.yaw || 0 }
   return { x: 0, y: 0, yaw: 0 }
 }
 
 async function executeTask (row) {
   if (!row?.id) return
+  if (!canExecute(row)) {
+    Notify.create({ type: 'warning', message: t('patrol_task_execute_map_mismatch') })
+    return
+  }
   try {
-    const start = await resolveStartPose()
+    const start = await resolveStartPose(row.mapId)
     const run = await executePatrolTask(row.id, {
       startX: start.x,
       startY: start.y,
@@ -549,7 +834,6 @@ async function cancelRun (row) {
   try {
     const resp = await patrolRunAction(row.id, 'cancel')
     if (mission.runId === row.id) mission.cancel()
-    // 取消后若池中有下一条被自动 start，且当前无会话，可直接接管
     const next = resp?.next_run || resp?.nextRun
     if (next?.id && !mission.active && !mission.pending) {
       mission.requestFromRun(next)
@@ -564,25 +848,35 @@ async function cancelRun (row) {
   }
 }
 
-function removeRun (row) {
-  if (!canDeleteRun(row)) {
-    Notify.create({ type: 'warning', message: t('patrol_run_cannot_delete') })
-    return
-  }
-  $q.dialog({
-    title: t('patrol_task_delete'),
-    message: t('patrol_run_delete_confirm', { name: row.name || row.execId || row.id }),
-    cancel: true,
-    persistent: true
-  }).onOk(async () => {
-    try {
-      await deletePatrolRun(row.id)
-      Notify.create({ type: 'positive', message: t('patrol_task_deleted') })
-      await reloadRuns()
-    } catch (e) {
-      Notify.create({ type: 'negative', message: e.message || t('patrol_run_cannot_delete') })
+const reportOpen = ref(false)
+const report = ref(null)
+
+async function openReport (row) {
+  try {
+    const detail = row.report ? row : await getPatrolRun(row.id)
+    report.value = detail.report || detail
+    if (!report.value?.summary) {
+      report.value = {
+        summary: {
+          name: detail.name,
+          exec_id: detail.exec_id || detail.execId,
+          type: detail.type,
+          status: detail.status,
+          result: detail.result,
+          map_name: detail.map_name,
+          startedAt: detail.startedAt,
+          endedAt: detail.endedAt,
+          progress: '—'
+        },
+        route: (detail.ordered || []).map((p) => p.name || p.id),
+        charge: detail.charge,
+        timeline: detail.report?.timeline || []
+      }
     }
-  })
+    reportOpen.value = true
+  } catch (e) {
+    Notify.create({ type: 'negative', message: e.message || t('patrol_task_load_failed') })
+  }
 }
 
 function searchResults () {
