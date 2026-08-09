@@ -66,10 +66,25 @@ const mapManager = RosMapPixi()
 provide('mapManager', mapManager)
 const pixiContainer = ref(null)
 const teleop = inject('teleop', null)
+const robotPose = inject('robotPose', null)
 const resetTeleopPose = inject('resetTeleopPose', () => {})
 
 let teleopTimer = null
 let teleopLastMs = 0
+
+/** 建图，或导航「手动模式」：本地积分驱动箭头（手柄已发 /cmd_vel） */
+const localTeleopDrive = computed(() => {
+  if (isMappingWorkspace.value) return true
+  return isNavigationWorkspace.value && navMode.value === 'manual'
+})
+
+function yawFromQuat (q) {
+  if (!q) return 0
+  return Math.atan2(
+    2 * ((q.w || 0) * (q.z || 0) + (q.x || 0) * (q.y || 0)),
+    1 - 2 * ((q.y || 0) ** 2 + (q.z || 0) ** 2)
+  )
+}
 
 onMounted(() => {
   mapManager.init({ canvas: pixiContainer.value })
@@ -97,8 +112,7 @@ onMounted(() => {
 
   teleopLastMs = performance.now()
   teleopTimer = setInterval(() => {
-    // 建图页：本地积分驱动箭头；导航页交给 /robot_pose（后续接定位）
-    if (!isMappingWorkspace.value) return
+    if (!localTeleopDrive.value) return
     if (!teleop || toolMode.value === 'relocate' || toolMode.value === 'goto') return
     if (!mapBoardVisible.value) return
     const now = performance.now()
@@ -131,8 +145,20 @@ onUnmounted(() => {
   if (teleopTimer) clearInterval(teleopTimer)
 })
 
-// 建图板显示期间以本地摇杆积分为准，不应用 /robot_pose：
-// 松手后再同步后端位姿会被 teleop_scale 放大后的坐标拽出画板。
+// 导航「自动模式」：箭头跟 /robot_pose（axion-nav）；手动模式用本地积分避免抢姿态
+watch(robotPose, (msg) => {
+  if (!isNavigationWorkspace.value) return
+  if (navMode.value === 'manual') return
+  if (toolMode.value === 'relocate' || toolMode.value === 'goto') return
+  const pose = msg?.pose
+  if (!pose?.position || !pose?.orientation) return
+  mapManager.updateRobotPose(pose)
+  if (teleop) {
+    teleop.value.x = pose.position.x
+    teleop.value.y = pose.position.y
+    teleop.value.yaw = yawFromQuat(pose.orientation)
+  }
+}, { deep: true })
 
 watch(mapState, value => {
   if (value === 'mapping') {
