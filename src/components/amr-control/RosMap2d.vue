@@ -86,8 +86,18 @@ function yawFromQuat (q) {
   )
 }
 
-onMounted(() => {
-  mapManager.init({ canvas: pixiContainer.value, railWidth: 184 })
+onMounted(async () => {
+  mapManager.onBoardLayout = (css) => {
+    railFrame.value = {
+      left: css.left,
+      top: css.top,
+      width: css.width,
+      height: css.height
+    }
+  }
+  await mapManager.init({ canvas: pixiContainer.value, railWidth: 184 })
+  // 无地图时也先画出黑色容器，右侧可放按钮
+  mapManager.layoutBoard?.()
   rosClient.loadMapRaw.value = (data) => {
     if (!mapBoardVisible.value && mapState.value === 'idle') return
     const first = !mapManager.map
@@ -218,6 +228,17 @@ function setNavMode (mode) {
 const isAutoNav = computed(() => navMode.value === 'auto')
 const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 
+/** 黑色格栅右侧控件带（相对 map-host，不是页面最右） */
+const railFrame = ref({ left: 0, top: 0, width: 184, height: 0 })
+const railStyle = computed(() => ({
+  left: `${railFrame.value.left}px`,
+  top: `${railFrame.value.top}px`,
+  width: `${railFrame.value.width}px`,
+  height: `${railFrame.value.height || 0}px`,
+  right: 'auto',
+  bottom: 'auto'
+}))
+
 </script>
 
 <template>
@@ -226,7 +247,7 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
     <div class="amr-map-host">
       <canvas ref="pixiContainer" class="map-canvas"/>
 
-      <aside class="amr-rail">
+      <aside class="amr-rail" :style="railStyle">
         <div class="amr-rail__top">
           <div v-if="isMonitorWorkspace" class="amr-rail__modes">
             <q-btn-toggle
@@ -322,7 +343,7 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 .amr-layout {
   position: absolute;
   inset: 0;
-  background: #2e2e2e;
+  background: #F2F3F5;
   overflow: hidden;
 }
 
@@ -331,6 +352,7 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
   width: 100%;
   height: 100%;
   overflow: hidden;
+  background: #F2F3F5;
 }
 
 .map-canvas {
@@ -344,13 +366,9 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
   z-index: 1;
 }
 
-/* 叠在画布右侧黑色区内，不是页面独立侧栏 */
+/* 叠在黑色格栅右侧内侧（位置由 boardLayout 计算） */
 .amr-rail {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 11.5rem;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
