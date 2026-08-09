@@ -1,7 +1,7 @@
 <script setup>
 /**
- * 导航页巡检点：查询 / 部署（添加、改名、删除）；单击发单点导航。
- * 「开始巡检」已移至「巡检任务 → 执行」。
+ * 导航页巡检点：查询 / 部署（添加、改名、删除）。
+ * 单击仅选中（可编辑/删除），不触发导航；执行巡检请到「巡检任务」。
  */
 import {
   createPatrolPoint,
@@ -19,21 +19,9 @@ const { t } = useI18n()
 const pageMode = inject('pageMode')
 const robotPose = inject('robotPose')
 const mapManager = inject('mapManager')
-const publish = inject('publish')
 const loadedMapName = inject('loadedMapName', null)
 const loadedMapId = inject('loadedMapId', null)
 const navMode = inject('navMode', ref('auto'))
-
-function stampHeader () {
-  const now = Date.now()
-  return {
-    frame_id: 'map',
-    stamp: {
-      sec: Math.floor(now / 1000),
-      nanosec: (now % 1000) * 1e6
-    }
-  }
-}
 
 function yawFromQuat (q) {
   if (!q) return 0
@@ -50,16 +38,6 @@ function quatFromYaw (yaw) {
     z: Math.sin(yaw / 2),
     w: Math.cos(yaw / 2)
   }
-}
-
-function publishGoalPose (pose) {
-  publish('/goal_pose', {
-    header: stampHeader(),
-    pose: {
-      position: { ...pose.position },
-      orientation: { ...pose.orientation }
-    }
-  })
 }
 
 const dialogOpen = ref(true)
@@ -224,22 +202,15 @@ async function addPose () {
   }
 }
 
+/** 选中巡检点：高亮，可改名/删除；不发 /goal_pose */
 function choose (item) {
-  if (navMode?.value === 'manual') {
-    Notify.create({ type: 'warning', message: t('nav_mode_auto_required') })
-    return
-  }
   selected.value = item.id
   mapManager?.changePoseColor?.(item.id)
-  if (item?.pose) {
-    mapManager?.updateTargetPose?.(item.pose)
-    try {
-      publishGoalPose(item.pose)
-      Notify.create({ type: 'positive', message: t('nav_goto_done') })
-    } catch (e) {
-      Notify.create({ type: 'negative', message: t('nav_publish_failed') })
-    }
-  }
+  Notify.create({
+    type: 'info',
+    message: t('patrol_selected', { name: item.name || item.id }),
+    timeout: 1200
+  })
 }
 
 async function editName (item) {
