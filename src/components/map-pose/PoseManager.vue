@@ -319,12 +319,27 @@ function closePanel () {
       </q-card-section>
     </q-card>
   </q-dialog>
-  <q-dialog seamless :model-value="dialogOpen" position="bottom">
-    <div class="q-pa-sm blur">
-      <div class="flex justify-center q-gutter-sm">
-        <q-btn :label="$t('patrol_add')" icon="add" color="primary" @click="addPose"/>
-        <q-btn :label="$t('patrol_remove')" icon="delete" color="negative" outline @click="removeSelected"/>
-      </div>
-    </div>
-  </q-dialog>
+  <!-- 叠在画布底部（黑框下方），不落到画布外 -->
+  <div v-if="dialogOpen" class="patrol-canvas-actions">
+    <q-btn :label="$t('patrol_add')" icon="add" color="primary" @click="addPose"/>
+    <q-btn :label="$t('patrol_remove')" icon="delete" color="negative" outline @click="removeSelected"/>
+  </div>
 </template>
+
+<style scoped>
+.patrol-canvas-actions {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+.patrol-canvas-actions :deep(.q-btn) {
+  pointer-events: auto;
+}
+</style>

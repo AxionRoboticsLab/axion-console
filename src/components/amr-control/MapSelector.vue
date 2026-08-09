@@ -148,7 +148,15 @@ function removeSelected () {
 </script>
 
 <template>
-  <q-btn no-wrap rounded :label="$t('amr2d_loadMap')" color="primary" icon="download" :loading="loading" @click="show"/>
+  <q-btn
+    no-wrap rounded outline
+    class="amr-rail__btn"
+    :label="$t('amr2d_loadMap')"
+    color="grey-7"
+    icon="download"
+    :loading="loading"
+    @click="show"
+  />
   <q-dialog v-model="visible" persistent>
     <q-card>
       <q-card-section class="text-h6" style="min-width: 20rem">

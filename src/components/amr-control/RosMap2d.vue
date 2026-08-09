@@ -254,9 +254,9 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
             <q-btn
               v-else
               class="amr-rail__btn"
-              rounded no-wrap
+              rounded outline no-wrap
               :label="$t('amr2d_focus')"
-              color="primary"
+              color="grey-7"
               icon="navigation"
               @click="mapManager.focusing = true; focusing = true"
             />

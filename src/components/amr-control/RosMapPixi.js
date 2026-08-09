@@ -393,11 +393,38 @@ export default function () {
     mapRender.centerOnMap()
   }
 
+  /** 占据栅格包围盒（黑框），去掉外围空白格栅 */
+  mapRender.findOccupiedBounds = (cells, w, h) => {
+    let minX = w
+    let minY = h
+    let maxX = -1
+    let maxY = -1
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (cells[y * w + x] < 50) continue
+        if (x < minX) minX = x
+        if (y < minY) minY = y
+        if (x > maxX) maxX = x
+        if (y > maxY) maxY = y
+      }
+    }
+    if (maxX < 0) return { minX: 0, minY: 0, maxX: w - 1, maxY: h - 1 }
+    return { minX, minY, maxX, maxY }
+  }
+
+  mapRender.cellToRgba = (x) => {
+    if (x < 0) return [255, 255, 255, 255]
+    const g = Math.max(0, Math.min(255, ((100 - x) / 100) * 255))
+    return [g, g, g, 255]
+  }
+
   /**
    * 使用ros上报的原始地图数据进行渲染
    * @param data OccupancyGrid格式的地图
    */
   mapRender.processMapRaw = (data) => {
+    const srcW = data.info.width
+    const srcH = data.info.height
     const cells = Array.from(data.data || [], raw => {
       let x = Number(raw)
       // rosbridge 常把 int8(-1) 编成 255
@@ -414,30 +441,44 @@ export default function () {
     const invert = cells.length > 0 && occ > free && occ / cells.length > 0.55
     if (invert) {
       console.warn('[RosMapPixi] occupancy looks inverted; flipping for display')
-    }
-
-    const texturePixels = new Uint8Array(cells.length * 4)
-    for (let i = 0; i < cells.length; i++) {
-      let x = cells[i]
-      if (invert && x >= 0) x = 100 - x
-      const o = i * 4
-      if (x < 0) {
-        // 未知：贴近白底，去掉「大黑框」观感
-        texturePixels[o] = 255
-        texturePixels[o + 1] = 255
-        texturePixels[o + 2] = 255
-        texturePixels[o + 3] = 255
-      } else {
-        const grayScale = Math.max(0, Math.min(255, ((100 - x) / 100) * 255))
-        texturePixels[o] = grayScale
-        texturePixels[o + 1] = grayScale
-        texturePixels[o + 2] = grayScale
-        texturePixels[o + 3] = 255
+      for (let i = 0; i < cells.length; i++) {
+        if (cells[i] >= 0) cells[i] = 100 - cells[i]
       }
     }
 
-    const w = data.info.width
-    const h = data.info.height
+    // 裁到黑框（占据区域），外层空白不再画格栅
+    const box = mapRender.findOccupiedBounds(cells, srcW, srcH)
+    const w = box.maxX - box.minX + 1
+    const h = box.maxY - box.minY + 1
+    const res = data.info.resolution
+    const origin = data.info.origin
+    const mapInfo = {
+      ...data.info,
+      width: w,
+      height: h,
+      origin: {
+        ...origin,
+        position: {
+          ...origin.position,
+          x: origin.position.x + box.minX * res,
+          y: origin.position.y + box.minY * res
+        }
+      }
+    }
+
+    const texturePixels = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const src = cells[(y + box.minY) * srcW + (x + box.minX)]
+        const rgba = mapRender.cellToRgba(src)
+        const o = (y * w + x) * 4
+        texturePixels[o] = rgba[0]
+        texturePixels[o + 1] = rgba[1]
+        texturePixels[o + 2] = rgba[2]
+        texturePixels[o + 3] = rgba[3]
+      }
+    }
+
     const previousMap = mapRender.map
     const sameSize = previousMap &&
       mapRender.mapInfo?.width === w &&
@@ -454,7 +495,8 @@ export default function () {
         source.resource = texturePixels
       }
       source.update?.()
-      mapRender.mapInfo = data.info
+      mapRender.mapInfo = mapInfo
+      mapRender.mapCrop = box
       return
     }
 
@@ -469,16 +511,17 @@ export default function () {
 
     const map = new Sprite(texture)
 
-    map.scale.set(data.info.resolution)
+    map.scale.set(mapInfo.resolution)
     map.anchor.y = 1
     map.scale.set(map.scale.x, -map.scale.y)
 
     map.y = -map.height
 
-    map.x += data.info.origin.position.x
-    map.y -= data.info.origin.position.y
+    map.x += mapInfo.origin.position.x
+    map.y -= mapInfo.origin.position.y
 
-    mapRender.mapInfo = data.info
+    mapRender.mapInfo = mapInfo
+    mapRender.mapCrop = box
     mapRender.map = map
 
     if (!previousMap) {
@@ -771,7 +814,7 @@ export default function () {
   }
 
   /**
-   * 重建 world 内容；按黑色容器尺寸适配白底地图初始比例
+   * 重建 world 内容；按视口适配裁切后的地图（黑框区域）
    */
   mapRender.updateFitScale = () => {
     if (!mapRender.boardRect || !mapRender.mapInfo) return
@@ -818,7 +861,7 @@ export default function () {
     mapRender.centerOnMap()
   }
 
-  /** 世界坐标浅色格网（旧地图没有格线像素时也能看见栅格） */
+  /** 仅在黑框（裁切后的地图）内画浅色格网 */
   mapRender.rebuildGridOverlay = () => {
     const info = mapRender.mapInfo
     if (!info) {
@@ -826,10 +869,16 @@ export default function () {
       return
     }
     const g = new Graphics()
-    const minX = info.origin.position.x
-    const minY = info.origin.position.y
-    const maxX = minX + info.width * info.resolution
-    const maxY = minY + info.height * info.resolution
+    // 略向内收，格线落在黑框内侧
+    const inset = Math.max(info.resolution * 1.5, 0.04)
+    const minX = info.origin.position.x + inset
+    const minY = info.origin.position.y + inset
+    const maxX = info.origin.position.x + info.width * info.resolution - inset
+    const maxY = info.origin.position.y + info.height * info.resolution - inset
+    if (maxX <= minX || maxY <= minY) {
+      mapRender.gridOverlay = null
+      return
+    }
     const step = Math.max(info.resolution * 10, 0.5)
     const color = 0x90a4ae
     const stroke = { width: Math.max(info.resolution * 0.4, 0.02), color, alpha: 0.65 }
