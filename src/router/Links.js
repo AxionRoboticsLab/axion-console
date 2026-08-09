@@ -45,28 +45,16 @@ const moduleLinks = [
         link: '/robot/navigation'
       },
       {
-        title: 'router_joystick',
-        caption: 'router_joystick_description',
-        icon: 'sports_esports',
-        link: '/robot/joystick'
+        title: 'router_patrol_task',
+        caption: 'router_patrol_task_description',
+        icon: 'route',
+        link: '/robot/patrol-tasks'
       },
       {
-        title: 'router_service',
-        caption: 'router_service_description',
-        icon: 'settings_phone',
-        link: '/robot/service'
-      },
-      {
-        title: 'router_param',
-        caption: 'router_param_description',
-        icon: 'tune',
-        link: '/robot/param'
-      },
-      {
-        title: 'router_setting',
-        caption: 'router_setting_description',
-        icon: 'settings',
-        link: '/robot/setting'
+        title: 'router_alarms',
+        caption: 'router_alarms_description',
+        icon: 'notifications_active',
+        link: '/robot/alarms'
       }
     ]
   },

@@ -15,6 +15,7 @@ export default function RosClient () {
   const advertised = new Set()
   const rosClient = {
     robotPose: ref({}),
+    navState: ref('idle'),
     loadMapData: ref(function (data) {}),
     loadMapRaw: ref(function (data) {}),
     loadLaserScan: ref(function (data) {}),
@@ -154,6 +155,7 @@ export default function RosClient () {
       case trajectoryTopic: rosClient.loadTrajectory.value(rosObject.msg); break
       case costMapTopic: rosClient.loadCostMap.value(rosObject.msg); break
       case '/map_state': rosClient.mapState.value = rosObject.msg.data; break
+      case '/nav_state': rosClient.navState.value = rosObject.msg.data; break
     }
   }
 
@@ -247,6 +249,7 @@ export default function RosClient () {
 
   rosClient.mapState = ref('idle')
   provide('mapState', rosClient.mapState)
+  provide('navState', rosClient.navState)
   provide('robotPose', rosClient.robotPose)
   provide('subscribe', rosClient.subscribe)
   provide('unsubscribe', rosClient.unsubscribe)

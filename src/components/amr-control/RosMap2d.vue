@@ -51,6 +51,9 @@ watch(connected, value => {
     rosClient.subscribe('/robot_pose')
     rosClient.subscribe('/map_state')
     rosClient.advertise('/map_command')
+    if (isNavigationWorkspace.value) {
+      rosClient.subscribe('/nav_state')
+    }
     // 导航页始终订阅全局路径，用于已走/未走着色
     const pathTopic = visualization.pathTopic || '/plan'
     if (pathTopic && !pathTopic.includes('move_base')) {
