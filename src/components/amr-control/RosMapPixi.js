@@ -9,11 +9,65 @@ export default function () {
     dragging: false,
     focusing: false,
     poseColor: '0xFF6666',
+    /** 右侧控件带宽度（与 CSS .amr-rail 一致）；黑色容器不含此区 */
+    railWidth: 184,
     lastPosition: {
       x: 0,
       y: 0
     },
     poseContainer: new Container()
+  }
+
+  /** 固定黑色容器 + 可缩放 world（白底地图） */
+  mapRender.ensureLayers = () => {
+    if (!mapRender.app?.stage || mapRender.layersReady) return
+    const stage = mapRender.app.stage
+    stage.eventMode = 'static'
+    mapRender.boardBg = new Graphics()
+    mapRender.railBg = new Graphics()
+    mapRender.worldViewport = new Container()
+    mapRender.world = new Container()
+    mapRender.boardMask = new Graphics()
+    mapRender.worldViewport.addChild(mapRender.world)
+    mapRender.worldViewport.addChild(mapRender.boardMask)
+    mapRender.worldViewport.mask = mapRender.boardMask
+    stage.addChild(mapRender.boardBg)
+    stage.addChild(mapRender.worldViewport)
+    stage.addChild(mapRender.railBg)
+    mapRender.layersReady = true
+    mapRender.layoutBoard()
+  }
+
+  mapRender.layoutBoard = () => {
+    if (!mapRender.app || !mapRender.boardBg) return
+    const w = mapRender.app.screen?.width || mapRender.canvas?.clientWidth || 800
+    const h = mapRender.app.screen?.height || mapRender.canvas?.clientHeight || 600
+    const rail = mapRender.railWidth || 0
+    const bw = Math.max(40, w - rail)
+    mapRender.boardRect = { x: 0, y: 0, w: bw, h }
+    mapRender.boardBg.clear()
+    // 黑色格栅容器（固定，不随地图缩放）
+    mapRender.boardBg.rect(0, 0, bw, h)
+    mapRender.boardBg.fill({ color: 0x3A3A3A })
+    mapRender.railBg.clear()
+    // 右侧黑色区：放按钮/手柄（同样固定）
+    mapRender.railBg.rect(bw, 0, rail, h)
+    mapRender.railBg.fill({ color: 0x2E2E2E })
+    mapRender.boardMask.clear()
+    mapRender.boardMask.rect(0, 0, bw, h)
+    mapRender.boardMask.fill({ color: 0xffffff })
+  }
+
+  mapRender.addToWorld = (child) => {
+    mapRender.ensureLayers()
+    if (child && child.parent !== mapRender.world) {
+      mapRender.world.addChild(child)
+    }
+  }
+
+  mapRender.getWorldScale = () => {
+    const s = mapRender.world?.scale?.x
+    return Number.isFinite(s) && s > 0 ? s : 1
   }
 
   /**
@@ -84,18 +138,18 @@ export default function () {
     }
   }
 
-  /** 把地图中心对准画布可视区域中心 */
+  /** 把地图中心对准黑色容器中心（不含右侧控件带） */
   mapRender.centerOnMap = () => {
-    if (!mapRender.app || !mapRender.canvas || !mapRender.mapInfo) {
+    if (!mapRender.app || !mapRender.canvas || !mapRender.mapInfo || !mapRender.world) {
       return
     }
+    mapRender.layoutBoard()
     const c = mapRender.mapCenter()
-    const w = mapRender.app.screen?.width || mapRender.canvas.clientWidth || mapRender.canvas.offsetWidth
-    const h = mapRender.app.screen?.height || mapRender.canvas.clientHeight || mapRender.canvas.offsetHeight
-    const sx = mapRender.app.stage.scale.x
-    const sy = mapRender.app.stage.scale.y
-    mapRender.app.stage.x = w / 2 - c.x * sx
-    mapRender.app.stage.y = h / 2 + c.y * sy
+    const board = mapRender.boardRect
+    const sx = mapRender.world.scale.x
+    const sy = mapRender.world.scale.y
+    mapRender.world.x = board.w / 2 - c.x * sx
+    mapRender.world.y = board.h / 2 + c.y * sy
   }
 
   /**
@@ -164,7 +218,7 @@ export default function () {
     g.addChild(label)
 
     g.position.set(x, -y)
-    mapRender.app.stage.addChild(g)
+    mapRender.addToWorld(g)
     mapRender.target = g
   }
 
@@ -205,9 +259,8 @@ export default function () {
       mapRender.poseContainer.addChild(point)
     })
 
-    // 确保标记层挂在 stage 上（仅 clear/rebuild 后可能丢失）
-    if (mapRender.app?.stage && mapRender.poseContainer.parent !== mapRender.app.stage) {
-      mapRender.app.stage.addChild(mapRender.poseContainer)
+    if (mapRender.poseContainer.parent !== mapRender.world) {
+      mapRender.addToWorld(mapRender.poseContainer)
     }
   }
 
@@ -236,6 +289,7 @@ export default function () {
    */
   mapRender.init = async (option) => {
     mapRender.canvas = option.canvas
+    if (option.railWidth != null) mapRender.railWidth = option.railWidth
     // 禁止浏览器默认拖拽/滚动，避免「外层画板」跟着跑
     Object.assign(mapRender.canvas.style, {
       touchAction: 'none',
@@ -246,19 +300,33 @@ export default function () {
 
     const app = new Application()
     await app.init({
-      // 中性底，避免整页大块 info 蓝；建图/导航共用
-      background: '#F2F3F5',
+      background: '#2E2E2E',
       resizeTo: option.canvas,
       canvas: option.canvas
     })
+    mapRender.app = app
+    mapRender.ensureLayers()
+
+    if (typeof ResizeObserver !== 'undefined') {
+      mapRender._ro = new ResizeObserver(() => {
+        mapRender.layoutBoard()
+        if (mapRender.mapInfo) mapRender.centerOnMap()
+      })
+      mapRender._ro.observe(option.canvas)
+    }
 
     /*
-     * 画布本身不可拖、不可缩放；仅对舞台（白色地图）等比例缩放。
+     * 黑色容器固定；仅 world（白底地图）等比例缩放。
      */
     app.canvas.addEventListener('wheel', event => {
       event.preventDefault()
       event.stopPropagation()
-      const scale = mapRender.app.stage.scale
+      if (!mapRender.world) return
+      // 滚轮落在右侧控件带上时不缩放地图
+      const rect = app.canvas.getBoundingClientRect()
+      const localX = event.clientX - rect.left
+      if (localX > rect.width - mapRender.railWidth) return
+      const scale = mapRender.world.scale
       const delta = event.deltaY > 0 ? 0.9 : 1.1
       const next = Math.min(8, Math.max(0.15, scale.x * delta))
       scale.set(next, next)
@@ -273,11 +341,13 @@ export default function () {
       }
     }
 
-    // 禁止拖动画布；仅保留重定位/画路径点击
+    // 禁止拖动画布；仅保留重定位/画路径点击（右侧控件带忽略）
     app.canvas.addEventListener('pointerdown', event => {
       event.preventDefault()
       event.stopPropagation()
       const pos = canvasPos(event)
+      mapRender.layoutBoard()
+      if (pos.x >= (mapRender.boardRect?.w ?? 0)) return
       if (mapRender.changeLocation) {
         mapRender.changePose(mapRender.globalToRos(pos.x, pos.y))
       } else if (mapRender.changeDirection) {
@@ -304,12 +374,12 @@ export default function () {
           event.touches[0].clientX - event.touches[1].clientX,
           event.touches[0].clientY - event.touches[1].clientY
         )
-        mapRender.initialScale = mapRender.app.stage.scale.x
+        mapRender.initialScale = mapRender.getWorldScale()
       }
     }, { passive: false })
 
     app.canvas.addEventListener('touchmove', event => {
-      if (event.touches.length === 2 && mapRender.initialDistance) {
+      if (event.touches.length === 2 && mapRender.initialDistance && mapRender.world) {
         event.preventDefault()
         const currentDistance = Math.hypot(
           event.touches[0].clientX - event.touches[1].clientX,
@@ -317,7 +387,7 @@ export default function () {
         )
         const scaleRatio = currentDistance / mapRender.initialDistance
         const next = Math.min(8, Math.max(0.15, scaleRatio * mapRender.initialScale))
-        mapRender.app.stage.scale.set(next, next)
+        mapRender.world.scale.set(next, next)
         mapRender.centerOnMap()
       }
     }, { passive: false })
@@ -325,8 +395,6 @@ export default function () {
     app.canvas.addEventListener('touchend', () => {
       mapRender.initialDistance = null
     })
-
-    mapRender.app = app
   }
 
   /** 画板固定居中 */
@@ -423,9 +491,8 @@ export default function () {
     mapRender.map = map
 
     if (!previousMap) {
-      // 先把地图挂上 stage，避免等 arrow.png 加载导致「很久才出现」
       if (mapRender.app?.stage) {
-        mapRender.app.stage.addChild(map)
+        mapRender.addToWorld(map)
         mapRender.updateStage()
         mapRender.centerOnMap()
       }
@@ -433,14 +500,14 @@ export default function () {
       return
     }
 
-    const stage = mapRender.app?.stage
-    if (stage && previousMap.parent === stage) {
-      const idx = Math.max(0, stage.children.indexOf(previousMap))
-      stage.removeChild(previousMap)
-      if (idx <= stage.children.length) {
-        stage.addChildAt(map, idx)
+    const world = mapRender.world
+    if (world && previousMap.parent === world) {
+      const idx = Math.max(0, world.children.indexOf(previousMap))
+      world.removeChild(previousMap)
+      if (idx <= world.children.length) {
+        world.addChildAt(map, idx)
       } else {
-        stage.addChild(map)
+        world.addChild(map)
       }
     } else if (mapRender.robot) {
       mapRender.updateStage()
@@ -484,10 +551,10 @@ export default function () {
     laserScan.position.y = mapRender.robot.y
     laserScan.rotation = mapRender.robot.rotation - Math.PI / 2
 
-    if (mapRender.laserScan) {
-      mapRender.app.stage.removeChild(mapRender.laserScan)
+    if (mapRender.laserScan?.parent) {
+      mapRender.laserScan.parent.removeChild(mapRender.laserScan)
     }
-    mapRender.app.stage.addChild(laserScan)
+    mapRender.addToWorld(laserScan)
     mapRender.laserScan = laserScan
   }
 
@@ -560,13 +627,13 @@ export default function () {
     if (mapRender.path?.parent) {
       mapRender.path.parent.removeChild(mapRender.path)
     }
-    mapRender.app.stage.addChild(layer)
+    mapRender.addToWorld(layer)
     mapRender.path = layer
 
     // 保证目标高亮在路径之上
-    if (mapRender.goalHalo) mapRender.app.stage.addChild(mapRender.goalHalo)
-    if (mapRender.target) mapRender.app.stage.addChild(mapRender.target)
-    if (mapRender.robot) mapRender.app.stage.addChild(mapRender.robot)
+    if (mapRender.goalHalo) mapRender.addToWorld(mapRender.goalHalo)
+    if (mapRender.target) mapRender.addToWorld(mapRender.target)
+    if (mapRender.robot) mapRender.addToWorld(mapRender.robot)
   }
 
   mapRender.clearNavPlan = () => {
@@ -595,10 +662,10 @@ export default function () {
       layer.circle(pts[i].x, -pts[i].y, 0.1)
       layer.fill({ color: 0x00897B, alpha: 0.55 })
     }
-    mapRender.app.stage.addChild(layer)
+    mapRender.addToWorld(layer)
     mapRender.patrolTour = layer
-    if (mapRender.target) mapRender.app.stage.addChild(mapRender.target)
-    if (mapRender.robot) mapRender.app.stage.addChild(mapRender.robot)
+    if (mapRender.target) mapRender.addToWorld(mapRender.target)
+    if (mapRender.robot) mapRender.addToWorld(mapRender.robot)
   }
 
   mapRender.clearPatrolTour = () => {
@@ -619,10 +686,10 @@ export default function () {
     data.poses.forEach(p => {
       trajectory.lineTo(p.pose.position.x, -p.pose.position.y)
     })
-    if (mapRender.trajectory) {
-      mapRender.app.stage.removeChild(mapRender.trajectory)
+    if (mapRender.trajectory?.parent) {
+      mapRender.trajectory.parent.removeChild(mapRender.trajectory)
     }
-    mapRender.app.stage.addChild(trajectory)
+    mapRender.addToWorld(trajectory)
     mapRender.trajectory = trajectory
   }
 
@@ -631,10 +698,10 @@ export default function () {
   }
 
   mapRender.clearTrajectory = () => {
-    if (mapRender.trajectory) {
-      mapRender.app.stage.removeChild(mapRender.trajectory)
-      mapRender.trajectory = null
+    if (mapRender.trajectory?.parent) {
+      mapRender.trajectory.parent.removeChild(mapRender.trajectory)
     }
+    mapRender.trajectory = null
   }
 
   mapRender.drawPathInit = () => {
@@ -656,14 +723,16 @@ export default function () {
       }) // 设置线的样式
       line.moveTo(pose.x, -pose.y)
       mapRender.drawedPath = line
-      mapRender.app.stage.addChild(mapRender.drawedPath)
+      mapRender.addToWorld(mapRender.drawedPath)
       mapRender.drawedPathData = []
     }
     mapRender.drawedPathData.push(pose)
   }
 
   mapRender.drawPathEnd = () => {
-    mapRender.app.stage.removeChild(mapRender.drawedPath)
+    if (mapRender.drawedPath?.parent) {
+      mapRender.drawedPath.parent.removeChild(mapRender.drawedPath)
+    }
     mapRender.drawedPath = null
   }
 
@@ -698,52 +767,58 @@ export default function () {
       if (mapRender.costMap?.parent) {
         mapRender.costMap.parent.removeChild(mapRender.costMap)
       }
-      mapRender.app.stage.addChild(costMap)
+      mapRender.addToWorld(costMap)
       mapRender.costMap = costMap
     }
   }
 
   mapRender.clearCostMap = () => {
-    if (mapRender.costMap) {
-      mapRender.app.stage.removeChild(mapRender.costMap)
-      mapRender.costMap = null
+    if (mapRender.costMap?.parent) {
+      mapRender.costMap.parent.removeChild(mapRender.costMap)
     }
+    mapRender.costMap = null
   }
 
   /**
-   * 渲染Canvas中需要渲染的元素
+   * 重建 world 内容；按黑色容器尺寸适配白底地图初始比例
    */
   mapRender.updateStage = () => {
     if (!mapRender.app || !mapRender.canvas) {
       return
     }
+    mapRender.ensureLayers()
+    mapRender.layoutBoard()
+    const board = mapRender.boardRect
     const info = mapRender.mapInfo
     const mapW = info ? info.width * info.resolution : 10
     const mapH = info ? info.height * info.resolution : 10
-    let W = Math.max(mapW, 1) * 1.15
-    let H = Math.max(mapH, 1) * 1.15
-    if (mapRender.canvas.offsetHeight > mapRender.canvas.offsetWidth) {
-      H = W * mapRender.canvas.offsetHeight / mapRender.canvas.offsetWidth
+    let W = Math.max(mapW, 1) * 1.12
+    let H = Math.max(mapH, 1) * 1.12
+    const aspect = board.h / Math.max(board.w, 1)
+    if (aspect > H / W) {
+      H = W * aspect
     } else {
-      W = H * mapRender.canvas.offsetWidth / mapRender.canvas.offsetHeight
+      W = H / aspect
     }
-    mapRender.app.stage.scale.set(
-      mapRender.canvas.offsetWidth / W,
-      mapRender.canvas.offsetHeight / H
-    )
+    // 等比例：取较小缩放，保证整图落在黑色容器内
+    const s = Math.min(board.w / W, board.h / H)
+    mapRender.world.scale.set(s, s)
+    mapRender.app.stage.scale.set(1, 1)
+    mapRender.app.stage.position.set(0, 0)
 
     mapRender.rebuildGridOverlay()
-    mapRender.app.stage.removeChildren()
+    mapRender.world.removeChildren()
     if (mapRender.map) {
-      mapRender.app.stage.addChild(mapRender.map)
+      mapRender.addToWorld(mapRender.map)
     }
     if (mapRender.gridOverlay) {
-      mapRender.app.stage.addChild(mapRender.gridOverlay)
+      mapRender.addToWorld(mapRender.gridOverlay)
     }
-    mapRender.app.stage.addChild(mapRender.poseContainer || new Container())
+    mapRender.addToWorld(mapRender.poseContainer || new Container())
     if (mapRender.robot) {
-      mapRender.app.stage.addChild(mapRender.robot)
+      mapRender.addToWorld(mapRender.robot)
     }
+    mapRender.centerOnMap()
   }
 
   /** 世界坐标浅色格网（旧地图没有格线像素时也能看见栅格） */
@@ -780,15 +855,17 @@ export default function () {
    * @param y 全局垂直坐标
    */
   mapRender.globalToRos = (x, y) => {
-    const rosX = (x - mapRender.app.stage.x) / mapRender.app.stage.scale.x
-    const rosY = (mapRender.app.stage.y - y + 50) / mapRender.app.stage.scale.y
-    return {
-      x: rosX,
-      y: rosY
+    if (!mapRender.world) {
+      return { x: 0, y: 0 }
     }
+    const sx = mapRender.world.scale.x || 1
+    const sy = mapRender.world.scale.y || 1
+    const rosX = (x - mapRender.world.x) / sx
+    const rosY = (mapRender.world.y - y) / sy
+    return { x: rosX, y: rosY }
   }
 
-  /** 清空地图画板（未建图 / 取消后只留背景） */
+  /** 清空地图画板（未建图 / 取消后只留黑色容器） */
   mapRender.clearMap = () => {
     if (mapRender.map?.parent) {
       mapRender.map.parent.removeChild(mapRender.map)
@@ -806,11 +883,12 @@ export default function () {
     }
     mapRender.robot = null
     mapRender.pose = null
-    if (mapRender.app?.stage) {
-      mapRender.app.stage.removeChildren()
-      mapRender.app.stage.x = 0
-      mapRender.app.stage.y = 0
+    if (mapRender.world) {
+      mapRender.world.removeChildren()
+      mapRender.world.scale.set(1, 1)
+      mapRender.world.position.set(0, 0)
     }
+    mapRender.layoutBoard()
   }
 
   return mapRender

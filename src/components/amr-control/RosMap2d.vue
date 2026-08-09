@@ -87,7 +87,7 @@ function yawFromQuat (q) {
 }
 
 onMounted(() => {
-  mapManager.init({ canvas: pixiContainer.value })
+  mapManager.init({ canvas: pixiContainer.value, railWidth: 184 })
   rosClient.loadMapRaw.value = (data) => {
     if (!mapBoardVisible.value && mapState.value === 'idle') return
     const first = !mapManager.map
@@ -222,99 +222,99 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 
 <template>
   <div class="amr-layout">
-    <!-- 左侧：地图画布（不可拖动画布；滚轮等比例缩放白色地图） -->
+    <!-- 整页即黑色格栅容器；右侧叠控件（不另开页面侧栏） -->
     <div class="amr-map-host">
       <canvas ref="pixiContainer" class="map-canvas"/>
+
+      <aside class="amr-rail">
+        <div class="amr-rail__top">
+          <div v-if="isMonitorWorkspace" class="amr-rail__modes">
+            <q-btn-toggle
+              dense
+              unelevated
+              toggle-color="primary"
+              :options="[
+                { label: $t('nav_mode_manual'), value: 'manual' },
+                { label: $t('nav_mode_auto'), value: 'auto' }
+              ]"
+              :model-value="navMode"
+              @update:model-value="setNavMode"
+            />
+          </div>
+
+          <div class="amr-rail__tools column q-gutter-y-sm">
+            <template v-if="!mapEditMode">
+              <q-btn
+                v-if="focusing"
+                class="amr-rail__btn"
+                rounded outline no-wrap
+                :label="$t('amr2d_no_focus')"
+                color="negative"
+                icon="navigation"
+                @click="mapManager.focusing = false; focusing = false"
+              />
+              <q-btn
+                v-else
+                class="amr-rail__btn"
+                rounded no-wrap
+                :label="$t('amr2d_focus')"
+                color="primary"
+                icon="navigation"
+                @click="mapManager.focusing = true; focusing = true"
+              />
+            </template>
+
+            <template v-if="isMappingWorkspace">
+              <map-create v-if="toolMode === 'default'" key="map-create"/>
+              <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
+              <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
+            </template>
+
+            <template v-else>
+              <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
+              <template v-if="isAutoNav">
+                <q-btn
+                  class="amr-rail__btn"
+                  rounded no-wrap
+                  :outline="toolMode !== 'relocate'"
+                  :label="$t('nav_relocate')"
+                  color="accent"
+                  icon="my_location"
+                  @click="setTool('relocate')"
+                />
+                <q-btn
+                  class="amr-rail__btn"
+                  rounded no-wrap
+                  :outline="toolMode !== 'goto'"
+                  :label="$t('nav_goto')"
+                  color="primary"
+                  icon="place"
+                  @click="setTool('goto')"
+                />
+                <q-btn
+                  v-if="!mapEditMode"
+                  class="amr-rail__btn"
+                  rounded no-wrap
+                  :outline="toolMode !== 'patrol'"
+                  :label="$t('patrol')"
+                  color="secondary"
+                  icon="flag"
+                  @click="setTool('patrol')"
+                />
+              </template>
+            </template>
+          </div>
+        </div>
+
+        <div v-if="hasRailJoy" class="amr-rail__joy">
+          <slot name="rail-joy"/>
+        </div>
+      </aside>
+
       <RobotRelocate v-if="isMonitorWorkspace" ref="robotRelocate"/>
       <pose-manager v-if="isMonitorWorkspace && toolMode === 'patrol'"/>
       <patrol-mission-runner v-if="isMonitorWorkspace"/>
     </div>
-
-    <!-- 右侧：工具竖排（上）+ 手柄（下），占黑/灰画布内侧右缘 -->
-    <aside class="amr-rail">
-      <div class="amr-rail__top">
-        <div v-if="isMonitorWorkspace" class="amr-rail__modes">
-          <q-btn-toggle
-            dense
-            unelevated
-            toggle-color="primary"
-            :options="[
-              { label: $t('nav_mode_manual'), value: 'manual' },
-              { label: $t('nav_mode_auto'), value: 'auto' }
-            ]"
-            :model-value="navMode"
-            @update:model-value="setNavMode"
-          />
-        </div>
-
-        <div class="amr-rail__tools column q-gutter-y-sm">
-          <template v-if="!mapEditMode">
-            <q-btn
-              v-if="focusing"
-              class="amr-rail__btn"
-              rounded outline no-wrap
-              :label="$t('amr2d_no_focus')"
-              color="negative"
-              icon="navigation"
-              @click="mapManager.focusing = false; focusing = false"
-            />
-            <q-btn
-              v-else
-              class="amr-rail__btn"
-              rounded no-wrap
-              :label="$t('amr2d_focus')"
-              color="primary"
-              icon="navigation"
-              @click="mapManager.focusing = true; focusing = true"
-            />
-          </template>
-
-          <template v-if="isMappingWorkspace">
-            <map-create v-if="toolMode === 'default'" key="map-create"/>
-            <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
-            <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
-          </template>
-
-          <template v-else>
-            <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
-            <template v-if="isAutoNav">
-              <q-btn
-                class="amr-rail__btn"
-                rounded no-wrap
-                :outline="toolMode !== 'relocate'"
-                :label="$t('nav_relocate')"
-                color="accent"
-                icon="my_location"
-                @click="setTool('relocate')"
-              />
-              <q-btn
-                class="amr-rail__btn"
-                rounded no-wrap
-                :outline="toolMode !== 'goto'"
-                :label="$t('nav_goto')"
-                color="primary"
-                icon="place"
-                @click="setTool('goto')"
-              />
-              <q-btn
-                v-if="!mapEditMode"
-                class="amr-rail__btn"
-                rounded no-wrap
-                :outline="toolMode !== 'patrol'"
-                :label="$t('patrol')"
-                color="secondary"
-                icon="flag"
-                @click="setTool('patrol')"
-              />
-            </template>
-          </template>
-        </div>
-      </div>
-
-      <div v-if="hasRailJoy" class="amr-rail__joy">
-        <slot name="rail-joy"/>
-      </div>
-    </aside>
   </div>
 </template>
 
@@ -322,21 +322,15 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 .amr-layout {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  background: #F2F3F5;
+  background: #2e2e2e;
   overflow: hidden;
 }
 
 .amr-map-host {
   position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
-  /* 左/上/底与地图贴齐，不再留一圈外框感 */
-  background: #F2F3F5;
 }
 
 .map-canvas {
@@ -350,18 +344,22 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
   z-index: 1;
 }
 
+/* 叠在画布右侧黑色区内，不是页面独立侧栏 */
 .amr-rail {
-  flex: 0 0 11.5rem;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: 11.5rem;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 0.65rem 0.55rem 0.75rem;
-  background: #E8E9EB;
-  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  background: transparent;
   z-index: 30;
   overflow: hidden;
+  pointer-events: none;
 }
 
 .amr-rail__top {
@@ -370,10 +368,12 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
   gap: 0.65rem;
   min-height: 0;
   overflow: auto;
+  pointer-events: none;
 }
 
 .amr-rail__modes {
   width: 100%;
+  pointer-events: auto;
 }
 .amr-rail__modes :deep(.q-btn-toggle) {
   width: 100%;
@@ -387,6 +387,7 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 
 .amr-rail__tools {
   width: 100%;
+  pointer-events: auto;
 }
 .amr-rail__tools :deep(.q-btn),
 .amr-rail__btn {
@@ -401,5 +402,13 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
   align-items: flex-end;
   padding-top: 0.5rem;
   margin-top: auto;
+  pointer-events: none;
+}
+.amr-rail__joy :deep(.joy-unit) {
+  pointer-events: none;
+}
+.amr-rail__joy :deep(.joy-key),
+.amr-rail__joy :deep(.joy-nipple) {
+  pointer-events: auto;
 }
 </style>
