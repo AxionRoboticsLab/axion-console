@@ -232,7 +232,7 @@ onMounted(async () => {
       // 等箭头创建后再放到充电点（或中心），避免与 createRobot 抢位姿
       void (async () => {
         for (let i = 0; i < 40 && !mapManager.robot; i++) {
-          await new Promise((r) => setTimeout(r, 25))
+          await new Promise((resolve) => setTimeout(resolve, 25))
         }
         await syncRobotToDefaultStart({ publishInitial: true })
         mapManager.zoomToFit?.()
