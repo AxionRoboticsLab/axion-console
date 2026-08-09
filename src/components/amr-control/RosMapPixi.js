@@ -131,8 +131,8 @@ export default function () {
   mapRender.layoutBoard = () => mapRender.layoutViewport()
 
   mapRender.clampContentZoom = (z) => {
-    const minZ = mapRender.minContentZoom || 1
-    const maxZ = mapRender.maxContentZoom || 5
+    const minZ = mapRender.minContentZoom ?? 0.35
+    const maxZ = mapRender.maxContentZoom || 8
     return Math.min(maxZ, Math.max(minZ, z))
   }
 
@@ -142,8 +142,26 @@ export default function () {
     mapRender.contentZoom = z
     const s = (mapRender.fitScale || 1) * z
     mapRender.world.scale.set(s, s)
-    mapRender.minScale = (mapRender.fitScale || 1) * (mapRender.minContentZoom || 1)
-    mapRender.maxScale = (mapRender.fitScale || 1) * (mapRender.maxContentZoom || 5)
+    mapRender.minScale = (mapRender.fitScale || 1) * (mapRender.minContentZoom ?? 0.35)
+    mapRender.maxScale = (mapRender.fitScale || 1) * (mapRender.maxContentZoom || 8)
+  }
+
+  /** 缩放后保持当前跟随/全图视角 */
+  mapRender.refreshViewAfterZoom = () => {
+    mapRender.applyContentZoom()
+    if (mapRender.focusing) mapRender.centerOnRobot()
+    else mapRender.centerOnMap()
+  }
+
+  mapRender.zoomBy = (factor) => {
+    mapRender.contentZoom = mapRender.clampContentZoom((mapRender.contentZoom || 1) * factor)
+    mapRender.refreshViewAfterZoom()
+  }
+
+  /** 铺满黑框（contentZoom=1） */
+  mapRender.zoomToFit = () => {
+    mapRender.contentZoom = 1
+    mapRender.refreshViewAfterZoom()
   }
 
   mapRender.clampWorldScale = (s) => {
@@ -224,20 +242,33 @@ export default function () {
     }
   }
 
-  /** 默认：箭头在正中心（格点交点），朝上方 */
-  mapRender.placeRobotAtMapCenter = () => {
-    if (!mapRender.robot) {
-      return
+  /** 将机器人放到世界坐标 (x,y)，yaw 弧度（0=朝上） */
+  mapRender.placeRobotAt = (x, y, yaw = 0) => {
+    if (!mapRender.robot) return null
+    const clamped = mapRender.clampWorld(Number(x) || 0, Number(y) || 0)
+    const yawN = Number(yaw) || 0
+    const orientation = {
+      x: 0,
+      y: 0,
+      z: Math.sin(yawN / 2),
+      w: Math.cos(yawN / 2)
     }
-    const c = mapRender.mapCenter()
-    mapRender.robot.x = c.x
-    mapRender.robot.y = -c.y
-    mapRender.robot.rotation = 0
+    mapRender.robot.x = clamped.x
+    mapRender.robot.y = -clamped.y
+    // 与 updateRobotPose 同一套朝向换算
+    mapRender.robot.rotation = -mapRender.quaternionToTheta(orientation) * Math.PI / 180
     mapRender.robot.children?.forEach((ch) => { ch.rotation = 0 })
     mapRender.pose = {
-      position: { x: c.x, y: c.y, z: 0 },
-      orientation: { x: 0, y: 0, z: 0, w: 1 }
+      position: { x: clamped.x, y: clamped.y, z: 0 },
+      orientation
     }
+    return mapRender.pose
+  }
+
+  /** 默认：箭头在正中心（格点交点），朝上方 */
+  mapRender.placeRobotAtMapCenter = () => {
+    const c = mapRender.mapCenter()
+    return mapRender.placeRobotAt(c.x, c.y, 0)
   }
 
   /** 地图中心对准黑框内侧中心（黑框本身不动） */
@@ -486,7 +517,7 @@ export default function () {
         if (mapRender.mapInfo) {
           mapRender.updateFitScale?.()
           mapRender.contentZoom = prevZoom
-          mapRender.centerOnMap()
+          mapRender.refreshViewAfterZoom()
         }
       })
       mapRender._ro.observe(option.canvas)
@@ -500,16 +531,16 @@ export default function () {
       }
     }
 
-    // 仅在黑框内滚轮缩放格栅；黑框尺寸不变
+    // 仅在黑框内滚轮缩放；跟随中以机器人为中心，否则以地图中心
     app.canvas.addEventListener('wheel', event => {
       event.preventDefault()
       event.stopPropagation()
       if (!mapRender.world || !mapRender.mapInfo) return
       const pos = canvasPos(event)
       if (!mapRender.pointInFrame(pos.x, pos.y)) return
-      const delta = event.deltaY > 0 ? 0.9 : 1.1
+      const delta = event.deltaY > 0 ? 0.85 : 1.15
       mapRender.contentZoom = mapRender.clampContentZoom((mapRender.contentZoom || 1) * delta)
-      mapRender.centerOnMap()
+      mapRender.refreshViewAfterZoom()
     }, { passive: false })
 
     // 禁止拖动画布；仅保留重定位/画路径点击
@@ -565,7 +596,7 @@ export default function () {
         mapRender.contentZoom = mapRender.clampContentZoom(
           (mapRender.initialContentZoom || 1) * scaleRatio
         )
-        mapRender.centerOnMap()
+        mapRender.refreshViewAfterZoom()
       }
     }, { passive: false })
 
@@ -1089,13 +1120,13 @@ export default function () {
     const info = mapRender.mapInfo
     const mapW = Math.max(info.width * info.resolution, 1)
     const mapH = Math.max(info.height * info.resolution, 1)
-    // 刚好铺满黑框内侧（黑框像素尺寸固定）
+    // 刚好铺满黑框内侧（黑框像素尺寸固定）；允许缩到更小以看全貌
     const s = Math.min(board.mapW / mapW, board.mapH / mapH)
     mapRender.fitScale = s
-    mapRender.minContentZoom = 1
-    mapRender.maxContentZoom = 5
-    mapRender.minScale = s
-    mapRender.maxScale = s * 5
+    mapRender.minContentZoom = 0.35
+    mapRender.maxContentZoom = 8
+    mapRender.minScale = s * 0.35
+    mapRender.maxScale = s * 8
   }
 
   mapRender.updateStage = () => {

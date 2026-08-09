@@ -136,16 +136,26 @@ function stampHeader () {
 }
 
 /**
- * 前端中心 + mock_nav /initialpose 对齐，避免 /robot_pose 仍停在 (0,0) 导致「飘了」
+ * 将机器人放到指定位姿，并同步 mock_nav /initialpose（避免停在默认 (0,0)）
  */
-function syncRobotToMapCenter ({ publishInitial = true } = {}) {
-  const c = mapManager.mapCenter?.()
-  if (!c || !Number.isFinite(c.x) || !Number.isFinite(c.y)) return null
-  mapManager.placeRobotAtMapCenter?.()
+function syncRobotToPose (xyYaw, { publishInitial = true } = {}) {
+  if (!xyYaw || !Number.isFinite(xyYaw.x) || !Number.isFinite(xyYaw.y)) return null
+  const yaw = Number(xyYaw.yaw) || 0
+  const pose = mapManager.placeRobotAt?.(xyYaw.x, xyYaw.y, yaw) || {
+    position: { x: xyYaw.x, y: xyYaw.y, z: 0 },
+    orientation: {
+      x: 0,
+      y: 0,
+      z: Math.sin(yaw / 2),
+      w: Math.cos(yaw / 2)
+    }
+  }
+  const x = pose.position.x
+  const y = pose.position.y
   if (teleop) {
-    teleop.value.x = c.x
-    teleop.value.y = c.y
-    teleop.value.yaw = 0
+    teleop.value.x = x
+    teleop.value.y = y
+    teleop.value.yaw = yaw
     teleop.value.vx = 0
     teleop.value.vy = 0
     teleop.value.wz = 0
@@ -160,17 +170,46 @@ function syncRobotToMapCenter ({ publishInitial = true } = {}) {
       header: stampHeader(),
       pose: {
         pose: {
-          position: { x: c.x, y: c.y, z: 0 },
-          orientation: { x: 0, y: 0, z: 0, w: 1 }
+          position: { x, y, z: 0 },
+          orientation: { ...pose.orientation }
         },
         covariance
       }
     })
   }
-  return c
+  return { x, y, yaw }
+}
+
+/** 兼容旧调用：强制到地图中心 */
+function syncRobotToMapCenter (opts) {
+  const c = mapManager.mapCenter?.()
+  if (!c) return null
+  return syncRobotToPose({ x: c.x, y: c.y, yaw: 0 }, opts)
+}
+
+/**
+ * 默认起点：有充电点 → 充电点；否则地图中心
+ */
+async function syncRobotToDefaultStart ({ publishInitial = true } = {}) {
+  const mapId = loadedMapId.value
+  if (mapId) {
+    try {
+      const charge = await getChargePoint(mapId)
+      if (charge && Number.isFinite(charge.x) && Number.isFinite(charge.y)) {
+        mapManager.drawChargeMarker?.(charge)
+        return syncRobotToPose(
+          { x: charge.x, y: charge.y, yaw: charge.yaw || 0 },
+          { publishInitial }
+        )
+      }
+    } catch (_) { /* ignore */ }
+  }
+  return syncRobotToMapCenter({ publishInitial })
 }
 
 provide('syncRobotToMapCenter', syncRobotToMapCenter)
+provide('syncRobotToDefaultStart', syncRobotToDefaultStart)
+provide('syncRobotToPose', syncRobotToPose)
 
 onMounted(async () => {
   await mapManager.init({ canvas: pixiContainer.value })
@@ -183,10 +222,15 @@ onMounted(async () => {
     mapManager.processMapRaw(data)
     mapReady.value = true
     if (first) {
-      // 首帧载图：箭头落在正中心朝上，并纠正 mock_nav 默认 (0,0)
-      syncRobotToMapCenter({ publishInitial: true })
-      mapManager.centerOnMap?.()
-      refreshChargeMarker()
+      // 等箭头创建后再放到充电点（或中心），避免与 createRobot 抢位姿
+      void (async () => {
+        for (let i = 0; i < 40 && !mapManager.robot; i++) {
+          await new Promise((r) => setTimeout(r, 25))
+        }
+        await syncRobotToDefaultStart({ publishInitial: true })
+        mapManager.zoomToFit?.()
+        await refreshChargeMarker()
+      })()
     }
   }
   if (visualization.laserScanEnable) rosClient.loadLaserScan.value = mapManager.processLaserScan
@@ -295,6 +339,20 @@ const focusing = ref(mapManager.focusing)
 provide('focusingUi', focusing)
 const robotRelocate = ref()
 const mapEditMode = computed(() => toolMode.value === 'relocate' || toolMode.value === 'goto')
+
+function zoomIn () { mapManager.zoomBy?.(1.2) }
+function zoomOut () { mapManager.zoomBy?.(1 / 1.2) }
+function zoomFit () {
+  mapManager.zoomToFit?.()
+}
+function setFocusing (on) {
+  mapManager.focusing = on
+  focusing.value = on
+  if (on) {
+    // 开启跟随时先回到可看全貌的缩放，再居中机器人
+    mapManager.zoomToFit?.()
+  }
+}
 
 function setTool (mode) {
   if (isMonitorWorkspace.value && navMode.value === 'manual' &&
@@ -409,7 +467,7 @@ watch(loadedMapId, () => { refreshChargeMarker() })
               :label="$t('amr2d_no_focus')"
               color="negative"
               icon="navigation"
-              @click="mapManager.focusing = false; focusing = false"
+              @click="setFocusing(false)"
             />
             <q-btn
               v-else
@@ -418,7 +476,7 @@ watch(loadedMapId, () => { refreshChargeMarker() })
               :label="$t('amr2d_focus')"
               color="grey-7"
               icon="navigation"
-              @click="mapManager.focusing = true; focusing = true"
+              @click="setFocusing(true)"
             />
           </template>
 
@@ -481,6 +539,11 @@ watch(loadedMapId, () => { refreshChargeMarker() })
     <!-- 右侧：白底地图容器（固定视口，缩放不溢出） -->
     <div class="amr-map-host">
       <canvas ref="pixiContainer" class="map-canvas"/>
+      <div class="amr-zoom-bar column q-gutter-xs">
+        <q-btn dense round unelevated color="white" text-color="grey-9" icon="add" :title="t('amr2d_zoom_in')" @click="zoomIn"/>
+        <q-btn dense round unelevated color="white" text-color="grey-9" icon="remove" :title="t('amr2d_zoom_out')" @click="zoomOut"/>
+        <q-btn dense round unelevated color="white" text-color="grey-9" icon="fit_screen" :title="t('amr2d_zoom_fit')" @click="zoomFit"/>
+      </div>
       <RobotRelocate v-if="isMonitorWorkspace" ref="robotRelocate"/>
       <pose-manager v-if="isMonitorWorkspace && toolMode === 'patrol'"/>
       <patrol-mission-runner v-if="isMonitorWorkspace"/>
@@ -569,5 +632,19 @@ watch(loadedMapId, () => { refreshChargeMarker() })
   user-select: none;
   display: block;
   z-index: 1;
+}
+
+.amr-zoom-bar {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 5.5rem;
+  z-index: 25;
+  padding: 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+.amr-zoom-bar :deep(.q-btn) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 </style>

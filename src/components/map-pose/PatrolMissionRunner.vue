@@ -20,6 +20,8 @@ const navState = inject('navState', ref('idle'))
 const pageMode = inject('pageMode', ref('default'))
 const focusingUi = inject('focusingUi', null)
 const syncRobotToMapCenter = inject('syncRobotToMapCenter', null)
+const syncRobotToDefaultStart = inject('syncRobotToDefaultStart', null)
+const syncRobotToPose = inject('syncRobotToPose', null)
 const mapReady = inject('mapReady', ref(false))
 const loadedMapId = inject('loadedMapId', ref(null))
 
@@ -99,22 +101,38 @@ function isPoseTrusted (p) {
   return !(nearOrigin && centerFar)
 }
 
-function startAtMapCenter () {
-  if (typeof syncRobotToMapCenter === 'function') {
-    const c = syncRobotToMapCenter({ publishInitial: true })
-    if (c) return { x: c.x, y: c.y, yaw: 0 }
+/** 位姿不可信时：优先充电点，否则地图中心（并纠正 mock） */
+async function placeAtDefaultStart () {
+  if (typeof syncRobotToDefaultStart === 'function') {
+    const p = await syncRobotToDefaultStart({ publishInitial: true })
+    if (p) return { x: p.x, y: p.y, yaw: p.yaw || 0 }
   }
-  return null
+  // 同步兜底：已缓存的充电点 / 地图中心
+  const c = chargePoint.value
+  if (c && Number.isFinite(c.x) && Number.isFinite(c.y)) {
+    if (typeof syncRobotToPose === 'function') {
+      const p = syncRobotToPose({ x: c.x, y: c.y, yaw: c.yaw || 0 }, { publishInitial: true })
+      if (p) return { x: p.x, y: p.y, yaw: p.yaw || 0 }
+    }
+    return { x: c.x, y: c.y, yaw: c.yaw || 0 }
+  }
+  if (typeof syncRobotToMapCenter === 'function') {
+    const p = syncRobotToMapCenter({ publishInitial: true })
+    if (p) return { x: p.x, y: p.y, yaw: p.yaw || 0 }
+  }
+  const mid = mapManager?.mapCenter?.()
+  return mid ? { x: mid.x, y: mid.y, yaw: 0 } : null
 }
 
-/** 优先当前位姿；不在充电点就从当前位置出发 */
-function resolveStart () {
+/**
+ * 执行起点 = 当前真实位姿；仅当 mock 未对齐时落到充电点（无则中心）
+ */
+async function resolveStart () {
   const live = normalizePose(robotPose?.value) || normalizePose(mapManager?.pose)
   if (isPoseTrusted(live)) {
     return { x: live.x, y: live.y, yaw: live.yaw || 0 }
   }
-  // 位姿未同步时落到地图中心，避免用 mock 默认 (0,0) 画错线
-  return startAtMapCenter() || mapManager?.mapCenter?.() || null
+  return placeAtDefaultStart()
 }
 
 function publishGoal (point) {
@@ -134,6 +152,8 @@ function enterAutoFollow () {
   if (pageMode) pageMode.value = 'default'
   mapManager.focusing = true
   if (focusingUi) focusingUi.value = true
+  // 跟随前先铺满全图，避免局部放大看不到巡检路线全貌
+  mapManager.zoomToFit?.()
 }
 
 function drawTour (start, ordered) {
@@ -252,7 +272,7 @@ async function tryStartPending () {
   enterAutoFollow()
   await ensureChargePoint()
 
-  const start = resolveStart()
+  const start = await resolveStart()
   if (!start) return
 
   let ordered
