@@ -1,6 +1,6 @@
 import { getCssVar } from 'quasar'
 import { useControlParams } from 'stores/control-params'
-import { Application, Sprite, Container, Texture, Graphics, Assets, BufferImageSource } from 'pixi.js'
+import { Application, Sprite, Container, Texture, Graphics, Text, Assets, BufferImageSource } from 'pixi.js'
 
 const controlParam = useControlParams()
 
@@ -122,23 +122,50 @@ export default function () {
     return mapRender.pose
   }
 
+  /** 目标点：圆点 + Target 文字（非箭头） */
   mapRender.updateTargetPose = (pose) => {
-    if (mapRender.target) {
-      mapRender.target.x = pose.position.x
-      mapRender.target.y = -pose.position.y
-      mapRender.target.rotation = (90 + mapRender.quaternionToTheta(pose.orientation)) * Math.PI / 180
-    } else {
-      const target = new Sprite(mapRender.robotTexture)
-      target.anchor.set(0.5)
-      target.alpha = 0.66
-      target.scale.set(controlParam.arrowScale / mapRender.robotTexture.width)
-      target.tint = getCssVar('positive')
-      target.x = pose.position.x
-      target.y = -pose.position.y
-      target.rotation = (90 + mapRender.quaternionToTheta(pose.orientation)) * Math.PI / 180
-      mapRender.target = target
-      mapRender.app.stage.addChild(mapRender.target)
+    if (!pose?.position || !mapRender.app) return
+    const x = pose.position.x
+    const y = pose.position.y
+    mapRender.drawTargetMarker(x, y)
+  }
+
+  mapRender.drawTargetMarker = (x, y) => {
+    if (!mapRender.app) return
+    if (mapRender.target?.parent) {
+      mapRender.target.parent.removeChild(mapRender.target)
     }
+    const g = new Container()
+    const mark = new Graphics()
+    mark.circle(0, 0, 0.12)
+    mark.fill({ color: 0x21BA45, alpha: 0.95 })
+    mark.circle(0, 0, 0.22)
+    mark.stroke({ width: 0.045, color: 0x21BA45, alpha: 1 })
+    // 十字准星
+    mark.moveTo(-0.32, 0)
+    mark.lineTo(0.32, 0)
+    mark.moveTo(0, -0.32)
+    mark.lineTo(0, 0.32)
+    mark.stroke({ width: 0.035, color: 0x1B5E20, alpha: 0.9 })
+    g.addChild(mark)
+
+    const label = new Text({
+      text: 'Target',
+      style: {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: 28,
+        fontWeight: '700',
+        fill: 0x1B5E20
+      }
+    })
+    label.anchor.set(0.5, 1)
+    label.scale.set(0.012)
+    label.position.set(0, -0.38)
+    g.addChild(label)
+
+    g.position.set(x, -y)
+    mapRender.app.stage.addChild(g)
+    mapRender.target = g
   }
 
   mapRender.removeTarget = () => {
@@ -146,6 +173,10 @@ export default function () {
       mapRender.target.parent.removeChild(mapRender.target)
     }
     mapRender.target = null
+    if (mapRender.goalHalo?.parent) {
+      mapRender.goalHalo.parent.removeChild(mapRender.goalHalo)
+    }
+    mapRender.goalHalo = null
   }
 
   mapRender.loadPoseList = async function (poseList) {
@@ -468,24 +499,8 @@ export default function () {
       y: Number(p.pose.position.y) || 0
     }))
     const last = data.poses[data.poses.length - 1]
-    // 目标点高亮（绿色箭头）
-    mapRender.updateTargetPose(last.pose)
-    mapRender.drawGoalHalo(last.pose.position.x, last.pose.position.y)
+    mapRender.drawTargetMarker(last.pose.position.x, last.pose.position.y)
     mapRender.redrawNavPlanProgress()
-  }
-
-  /** 目标点外圈高亮 */
-  mapRender.drawGoalHalo = (x, y) => {
-    if (mapRender.goalHalo?.parent) {
-      mapRender.goalHalo.parent.removeChild(mapRender.goalHalo)
-    }
-    const g = new Graphics()
-    g.circle(x, -y, 0.28)
-    g.stroke({ width: 0.06, color: 0x21BA45, alpha: 0.95 })
-    g.circle(x, -y, 0.14)
-    g.fill({ color: 0x21BA45, alpha: 0.35 })
-    mapRender.app.stage.addChild(g)
-    mapRender.goalHalo = g
   }
 
   mapRender.splitPlanAtRobot = (pts, rx, ry) => {

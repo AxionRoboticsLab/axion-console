@@ -130,10 +130,10 @@ mapManager.changePose = (pos) => {
 
 mapManager.changeTheta = (pos) => {
   if (!active.value || step.value !== 'direction') return
-  const theta = Math.atan2(
-    pos.y - tempPose.value.position.y,
-    pos.x - tempPose.value.position.x
-  )
+  // 与地图箭头一致：yaw=0 朝 +Y（上），atan2(dx, dy)
+  const dx = pos.x - tempPose.value.position.x
+  const dy = pos.y - tempPose.value.position.y
+  const theta = Math.atan2(dx, dy)
   tempPose.value.orientation = {
     x: 0,
     y: 0,
