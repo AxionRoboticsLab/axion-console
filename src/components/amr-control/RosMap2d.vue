@@ -12,6 +12,8 @@ import { getActiveMap, getChargePoint, setChargePoint } from 'src/api/maps'
 import { Notify, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useControlParams } from 'stores/control-params'
+import { useRobotRuntime } from 'stores/robot-runtime'
+import { usePatrolMission } from 'stores/patrol-mission'
 import { useVisualization } from 'stores/visualization'
 import TerminateProcess from 'components/amr-control/TerminateProcess.vue'
 
@@ -37,6 +39,10 @@ const connected = inject('connected')
 const mapState = inject('mapState')
 const visualization = useVisualization()
 const controlParam = useControlParams()
+const robotRuntime = useRobotRuntime()
+const patrolMission = usePatrolMission()
+const chargePose = ref(null)
+const CHARGE_NEAR_M = 0.35
 
 const mapBoardVisible = inject('mapBoardVisible', ref(props.workspace === 'monitor'))
 const mapReady = inject('mapReady', ref(false))
@@ -86,6 +92,7 @@ async function restoreActiveMapFromDb ({ publishLoad = true } = {}) {
 }
 
 watch(connected, async value => {
+  robotRuntime.setOnline(Boolean(value))
   if (value) {
     rosClient.subscribe(controlParam.mapTopic)
     rosClient.subscribe('/robot_pose')
@@ -265,6 +272,7 @@ onMounted(async () => {
         w: Math.cos(t.yaw * 0.5)
       }
     })
+    syncChargeStateFromPose(t.x, t.y)
   }, 50)
 })
 
@@ -278,6 +286,16 @@ onUnmounted(() => {
   if (rosClient.loadTrajectory) rosClient.loadTrajectory.value = noop
   if (rosClient.loadCostMap) rosClient.loadCostMap.value = noop
 })
+
+function syncChargeStateFromPose (x, y) {
+  const c = chargePose.value
+  if (!c || !Number.isFinite(x) || !Number.isFinite(y)) {
+    robotRuntime.setNearCharge(false)
+    return
+  }
+  const near = Math.hypot(x - c.x, y - c.y) <= CHARGE_NEAR_M
+  robotRuntime.setNearCharge(near)
+}
 
 watch(robotPose, (msg) => {
   if (!isMonitorWorkspace.value) return
@@ -296,7 +314,21 @@ watch(robotPose, (msg) => {
     x: pose.position.x,
     y: pose.position.y
   })
+  syncChargeStateFromPose(pose.position.x, pose.position.y)
 }, { deep: true })
+
+watch(
+  () => [patrolMission.active, patrolMission.paused, patrolMission.phase],
+  () => {
+    if (!patrolMission.active) {
+      if (robotRuntime.workState === 'patrol' || robotRuntime.workState === 'paused') {
+        robotRuntime.setWorkState(robotRuntime.online ? 'idle' : 'offline')
+      }
+      return
+    }
+    robotRuntime.setWorkState(patrolMission.paused ? 'paused' : 'patrol')
+  }
+)
 
 watch(mapState, value => {
   if (value === 'mapping') {
@@ -373,22 +405,36 @@ const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 async function refreshChargeMarker () {
   const id = loadedMapId.value
   if (!id) {
+    chargePose.value = null
     mapManager.clearChargeMarker?.()
+    robotRuntime.setNearCharge(false)
     return
   }
   try {
     const pt = await getChargePoint(id)
-    if (pt) mapManager.drawChargeMarker?.(pt)
-    else mapManager.clearChargeMarker?.()
+    if (pt) {
+      chargePose.value = { x: pt.x, y: pt.y, yaw: pt.yaw || 0 }
+      mapManager.drawChargeMarker?.(pt)
+      const live = mapManager.pose?.position || robotPose?.value?.pose?.position
+      if (live) syncChargeStateFromPose(live.x, live.y)
+    } else {
+      chargePose.value = null
+      mapManager.clearChargeMarker?.()
+      robotRuntime.setNearCharge(false)
+    }
   } catch (_) {
+    chargePose.value = null
     mapManager.clearChargeMarker?.()
+    robotRuntime.setNearCharge(false)
   }
 }
 
 async function applyChargeAtRobot (mapId, x, y, yaw) {
   try {
     const pt = await setChargePoint(mapId, { x, y, yaw, name: 'charge' })
+    chargePose.value = { x: pt.x, y: pt.y, yaw: pt.yaw || 0 }
     mapManager.drawChargeMarker?.(pt)
+    syncChargeStateFromPose(x, y)
     Notify.create({ type: 'positive', message: t('charge_point_set') })
   } catch (e) {
     Notify.create({ type: 'negative', message: e.message || t('nav_publish_failed') })

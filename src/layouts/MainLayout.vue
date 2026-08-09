@@ -83,6 +83,25 @@
         <q-space />
 
         <div class="row items-center no-wrap q-gutter-xs">
+          <q-btn flat round dense :color="runtime.batteryColor" :icon="runtime.batteryIcon" class="robot-battery-btn">
+            <q-tooltip anchor="bottom middle" self="top middle">
+              <div>{{ t('robot_battery') }}: {{ runtime.batteryLabel }}</div>
+              <div>
+                {{ runtime.charging ? t('robot_charging') : t('robot_discharging') }}
+              </div>
+            </q-tooltip>
+          </q-btn>
+
+          <q-btn
+            flat round dense
+            :icon="runtime.online ? 'smart_toy' : 'cloud_off'"
+            :color="runtime.online ? 'white' : 'warning'"
+            :aria-label="t('robot_status_title')"
+            @click="statusOpen = true"
+          >
+            <q-tooltip>{{ t('robot_status_title') }}</q-tooltip>
+          </q-btn>
+
           <q-btn flat round dense icon="translate" :aria-label="t('toolbar_language')">
             <q-tooltip>{{ t('toolbar_language') }}</q-tooltip>
             <q-menu anchor="bottom right" self="top right">
@@ -169,15 +188,19 @@
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <RobotStatusDialog v-model="statusOpen"/>
   </q-layout>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
+import RobotStatusDialog from 'components/common/RobotStatusDialog.vue'
 import { useAuthStore } from 'stores/auth'
+import { useRobotRuntime } from 'stores/robot-runtime'
 import { useLocaleSwitch } from 'src/composables/useLocaleSwitch'
 
 defineOptions({
@@ -190,6 +213,8 @@ const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const runtime = useRobotRuntime()
+const statusOpen = ref(false)
 const { localeMenu, setLocale } = useLocaleSwitch()
 
 const homeMenu = computed(() =>
@@ -256,6 +281,7 @@ async function onLogout () {
 }
 
 onMounted(async () => {
+  runtime.startTicker()
   if (auth.isAuthenticated) {
     try {
       await auth.fetchMe()
@@ -263,6 +289,10 @@ onMounted(async () => {
       // token 失效由 axios 拦截处理
     }
   }
+})
+
+onUnmounted(() => {
+  runtime.stopTicker()
 })
 </script>
 

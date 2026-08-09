@@ -119,6 +119,11 @@
               <div class="text-caption text-grey-7">~ {{ props.row.endedAt || '—' }}</div>
             </q-td>
           </template>
+          <template #body-cell-execId="props">
+            <q-td :props="props">
+              <span class="text-caption text-grey-8" :title="props.row.execId">{{ shortExecId(props.row.execId) }}</span>
+            </q-td>
+          </template>
           <template #body-cell-actions="props">
             <q-td :props="props">
               <q-btn
@@ -140,7 +145,7 @@
                 @click="cancelRun(props.row)"
               />
               <q-btn
-                v-if="props.row.status === 'done' || props.row.status === 'cancelled'"
+                v-if="canDeleteRun(props.row)"
                 flat dense color="grey-8" icon="delete"
                 :label="t('patrol_task_delete')"
                 @click="removeRun(props.row)"
@@ -260,12 +265,20 @@ const taskColumns = computed(() => [
 
 const resultColumns = computed(() => [
   { name: 'name', label: t('patrol_task_name'), field: 'name', align: 'left' },
+  { name: 'execId', label: t('patrol_task_exec_id'), field: 'execId', align: 'left' },
   { name: 'status', label: t('patrol_task_status'), field: 'status', align: 'left' },
   { name: 'result', label: t('patrol_task_result'), field: 'result', align: 'left' },
   { name: 'route', label: t('patrol_task_route'), field: 'route', align: 'left' },
   { name: 'timeRange', label: t('patrol_task_exec_time'), field: 'timeRange', align: 'left' },
-  { name: 'actions', label: t('patrol_task_actions'), field: 'actions', align: 'left' }
+  { name: 'actions', label: t('patrol_task_actions'), field: 'actions', align: 'left', style: 'min-width: 12rem' }
 ])
+
+function canDeleteRun (row) {
+  const s = row?.status
+  // 待执行 / 执行中 / 暂停：不可删
+  if (s === 'waiting' || s === 'running' || s === 'paused') return false
+  return s === 'done' || s === 'cancelled' || Boolean(row?.result)
+}
 
 function normalizeTask (row) {
   return {
@@ -308,6 +321,10 @@ function routeLabel (row) {
   const names = (row.ordered || []).map((p) => p.name || p.id)
   if (row.charge?.name || row.charge) names.push(t('charge_point'))
   return names.length ? names.join(' → ') : '—'
+}
+function shortExecId (id) {
+  if (!id) return '—'
+  return id.length > 14 ? `${id.slice(0, 10)}…` : id
 }
 
 function onTaskRequest (req) {
@@ -366,7 +383,11 @@ async function reloadRuns () {
       from: f.range?.from || undefined,
       to: f.range?.to || undefined
     })
-    runs.value = rows || []
+    runs.value = (rows || []).map((r) => ({
+      ...r,
+      execId: r.exec_id || r.execId || '',
+      name: r.name || r.task_name || ''
+    }))
     resultPagination.value.rowsNumber = runs.value.length
   } catch (e) {
     Notify.create({ type: 'negative', message: e.message || t('patrol_task_load_failed') })
@@ -544,9 +565,13 @@ async function cancelRun (row) {
 }
 
 function removeRun (row) {
+  if (!canDeleteRun(row)) {
+    Notify.create({ type: 'warning', message: t('patrol_run_cannot_delete') })
+    return
+  }
   $q.dialog({
     title: t('patrol_task_delete'),
-    message: t('patrol_run_delete_confirm', { name: row.name }),
+    message: t('patrol_run_delete_confirm', { name: row.name || row.execId || row.id }),
     cancel: true,
     persistent: true
   }).onOk(async () => {
@@ -555,7 +580,7 @@ function removeRun (row) {
       Notify.create({ type: 'positive', message: t('patrol_task_deleted') })
       await reloadRuns()
     } catch (e) {
-      Notify.create({ type: 'negative', message: e.message || t('patrol_task_save_failed') })
+      Notify.create({ type: 'negative', message: e.message || t('patrol_run_cannot_delete') })
     }
   })
 }
