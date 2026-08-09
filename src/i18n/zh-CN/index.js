@@ -219,7 +219,6 @@ export default {
   nav_mode_auto: '自动模式',
   nav_mode_auto_required: '请先切换到自动模式',
   amr2d_loadMap_failed: '未能获取地图列表，请确认已登录且 edge-agent 可用',
-  amr2d_loadMap_hint: '元数据在 edge-agent；栅格在 axion-slam：~/data/maps/<名字>.pgm 与 .yaml',
   amr2d_loadMap_done: '已请求加载地图',
   amr2d_loadMap_current: '当前地图：{name}',
   amr2d_loadMap_already: '已加载地图 {name}',

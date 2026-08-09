@@ -219,7 +219,6 @@ export default {
   nav_mode_auto: 'Auto',
   nav_mode_auto_required: 'Switch to Auto mode first',
   amr2d_loadMap_failed: 'Could not list maps; check login and edge-agent',
-  amr2d_loadMap_hint: 'Metadata in edge-agent; grids on axion-slam: ~/data/maps/<name>.pgm and .yaml',
   amr2d_loadMap_done: 'Load map requested',
   amr2d_loadMap_current: 'Current map: {name}',
   amr2d_loadMap_already: 'Map {name} is already loaded',

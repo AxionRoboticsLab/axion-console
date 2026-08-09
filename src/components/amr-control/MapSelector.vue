@@ -163,9 +163,6 @@ function removeSelected () {
       </q-card-section>
       <q-card-section v-else-if="maps.length === 0" class="text-subtitle1 text-grey-7 text-bold">
         {{ $t('amr2d_loadMap_empty') }}
-        <div class="text-caption q-mt-sm text-weight-regular">
-          {{ $t('amr2d_loadMap_hint') }}
-        </div>
       </q-card-section>
       <q-card-section v-else>
         <div class="text-body2 text-grey-8 q-mb-sm">{{ $t('amr2d_loadMap_description') }}</div>
