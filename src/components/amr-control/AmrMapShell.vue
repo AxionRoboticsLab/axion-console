@@ -1,6 +1,6 @@
 <script setup>
 /**
- * 2D建图 / 实时监控共用：ROS 连接 + 地图画布 + 右侧手柄
+ * 2D建图 / 实时监控共用：ROS 连接 + 左侧手柄 + 地图画布
  */
 import JoyStick from 'components/ros/JoyStick.vue'
 import RosClient from 'components/ros/RosClient'
@@ -90,6 +90,6 @@ onUnmounted(() => {
   max-height: calc(100vh - var(--app-header-height));
   overflow: hidden;
   box-sizing: border-box;
-  background: #F2F3F5;
+  background: #fff;
 }
 </style>

@@ -9,8 +9,9 @@ export default function () {
     dragging: false,
     focusing: false,
     poseColor: '0xFF6666',
-    /** 右侧控件带宽度（与 CSS .amr-rail 一致）；黑色容器不含此区 */
-    railWidth: 184,
+    fitScale: 1,
+    minScale: 0.5,
+    maxScale: 8,
     lastPosition: {
       x: 0,
       y: 0
@@ -18,97 +19,41 @@ export default function () {
     poseContainer: new Container()
   }
 
-  /** 固定黑色格栅容器（页面浅底之上）+ 容器内可缩放 world */
+  /** 固定视口（裁剪）+ 可缩放 world；无黑色装饰底 */
   mapRender.ensureLayers = () => {
     if (!mapRender.app?.stage || mapRender.layersReady) return
     const stage = mapRender.app.stage
     stage.eventMode = 'static'
-    mapRender.boardBg = new Graphics()
-    mapRender.railBg = new Graphics()
     mapRender.worldViewport = new Container()
     mapRender.world = new Container()
-    mapRender.boardMask = new Graphics()
+    mapRender.viewMask = new Graphics()
     mapRender.worldViewport.addChild(mapRender.world)
-    mapRender.worldViewport.addChild(mapRender.boardMask)
-    mapRender.worldViewport.mask = mapRender.boardMask
-    stage.addChild(mapRender.boardBg)
+    mapRender.worldViewport.addChild(mapRender.viewMask)
+    mapRender.worldViewport.mask = mapRender.viewMask
     stage.addChild(mapRender.worldViewport)
-    stage.addChild(mapRender.railBg)
     mapRender.layersReady = true
-    mapRender.layoutBoard()
+    mapRender.layoutViewport()
   }
 
-  /**
-   * 在画布内居中放置「黑色格栅」固定框（尺寸随窗口适配一次，不随地图缩放变）。
-   * 框内：左=地图区，右=控件带。
-   */
-  mapRender.layoutBoard = () => {
-    if (!mapRender.app || !mapRender.boardBg) return
-    const vw = mapRender.app.screen?.width || mapRender.canvas?.clientWidth || 800
-    const vh = mapRender.app.screen?.height || mapRender.canvas?.clientHeight || 600
-    const rail = mapRender.railWidth || 184
-    const pad = 16
-    const maxW = Math.max(320, vw - pad * 2)
-    const maxH = Math.max(240, vh - pad * 2)
-    // 黑色容器尽量铺满内容区，但四周留出页面浅色底
-    const boardW = maxW
-    const boardH = maxH
-    const boardX = Math.round((vw - boardW) / 2)
-    const boardY = Math.round((vh - boardH) / 2)
-    const mapW = Math.max(80, boardW - rail)
-    const mapH = boardH
+  /** 视口 = 整块画布；放大内容裁切在容器内，不溢出 */
+  mapRender.layoutViewport = () => {
+    if (!mapRender.app || !mapRender.viewMask) return
+    const w = mapRender.app.screen?.width || mapRender.canvas?.clientWidth || 800
+    const h = mapRender.app.screen?.height || mapRender.canvas?.clientHeight || 600
+    mapRender.boardRect = { x: 0, y: 0, w, h, mapW: w, mapH: h }
+    mapRender.worldViewport.position.set(0, 0)
+    mapRender.viewMask.clear()
+    mapRender.viewMask.rect(0, 0, w, h)
+    mapRender.viewMask.fill({ color: 0xffffff })
+  }
 
-    mapRender.boardRect = {
-      x: boardX,
-      y: boardY,
-      w: boardW,
-      h: boardH,
-      mapW,
-      mapH,
-      rail
-    }
+  /** @deprecated 兼容旧调用 */
+  mapRender.layoutBoard = () => mapRender.layoutViewport()
 
-    mapRender.boardBg.clear()
-    mapRender.boardBg.roundRect(boardX, boardY, boardW, boardH, 6)
-    mapRender.boardBg.fill({ color: 0x424242 })
-    // 固定格线（装饰，不随白地图缩放）
-    const step = 24
-    const gridStroke = { width: 1, color: 0x333333, alpha: 0.9 }
-    for (let x = boardX + step; x < boardX + boardW; x += step) {
-      mapRender.boardBg.moveTo(x, boardY)
-      mapRender.boardBg.lineTo(x, boardY + boardH)
-      mapRender.boardBg.stroke(gridStroke)
-    }
-    for (let y = boardY + step; y < boardY + boardH; y += step) {
-      mapRender.boardBg.moveTo(boardX, y)
-      mapRender.boardBg.lineTo(boardX + boardW, y)
-      mapRender.boardBg.stroke(gridStroke)
-    }
-
-    mapRender.railBg.clear()
-    mapRender.railBg.rect(boardX + mapW, boardY, rail, boardH)
-    mapRender.railBg.fill({ color: 0x383838, alpha: 0.97 })
-
-    mapRender.worldViewport.position.set(boardX, boardY)
-    mapRender.boardMask.clear()
-    mapRender.boardMask.rect(0, 0, mapW, mapH)
-    mapRender.boardMask.fill({ color: 0xffffff })
-
-    // 供 Vue 把控件叠在黑色容器右侧（不是页面最右侧）
-    const css = {
-      left: boardX + mapW,
-      top: boardY,
-      width: rail,
-      height: boardH,
-      boardLeft: boardX,
-      boardTop: boardY,
-      boardWidth: boardW,
-      boardHeight: boardH
-    }
-    mapRender.boardLayoutCss = css
-    if (typeof mapRender.onBoardLayout === 'function') {
-      mapRender.onBoardLayout(css)
-    }
+  mapRender.clampWorldScale = (s) => {
+    const minS = mapRender.minScale || 0.5
+    const maxS = mapRender.maxScale || 8
+    return Math.min(maxS, Math.max(minS, s))
   }
 
   mapRender.addToWorld = (child) => {
@@ -191,12 +136,12 @@ export default function () {
     }
   }
 
-  /** 把地图中心对准黑色容器「地图区」中心（不含右侧控件带） */
+  /** 地图中心对准视口中心 */
   mapRender.centerOnMap = () => {
     if (!mapRender.app || !mapRender.canvas || !mapRender.mapInfo || !mapRender.world) {
       return
     }
-    mapRender.layoutBoard()
+    mapRender.layoutViewport()
     const c = mapRender.mapCenter()
     const board = mapRender.boardRect
     const sx = mapRender.world.scale.x
@@ -342,8 +287,6 @@ export default function () {
    */
   mapRender.init = async (option) => {
     mapRender.canvas = option.canvas
-    if (option.railWidth != null) mapRender.railWidth = option.railWidth
-    // 禁止浏览器默认拖拽/滚动，避免「外层画板」跟着跑
     Object.assign(mapRender.canvas.style, {
       touchAction: 'none',
       userSelect: 'none',
@@ -353,8 +296,7 @@ export default function () {
 
     const app = new Application()
     await app.init({
-      // 与页面一致的浅底；黑色格栅是画布内固定容器
-      background: '#F2F3F5',
+      background: '#FFFFFF',
       resizeTo: option.canvas,
       canvas: option.canvas
     })
@@ -363,37 +305,23 @@ export default function () {
 
     if (typeof ResizeObserver !== 'undefined') {
       mapRender._ro = new ResizeObserver(() => {
-        mapRender.layoutBoard()
-        if (mapRender.mapInfo) mapRender.centerOnMap()
+        mapRender.layoutViewport()
+        if (mapRender.mapInfo) {
+          mapRender.updateFitScale?.()
+          mapRender.centerOnMap()
+        }
       })
       mapRender._ro.observe(option.canvas)
     }
 
-    /*
-     * 黑色容器固定；仅 world（白底地图）等比例缩放。
-     */
+    // 视口固定；仅白地图缩放，并裁切在容器内
     app.canvas.addEventListener('wheel', event => {
       event.preventDefault()
       event.stopPropagation()
       if (!mapRender.world) return
-      mapRender.layoutBoard()
-      const board = mapRender.boardRect
-      const rect = app.canvas.getBoundingClientRect()
-      const localX = event.clientX - rect.left
-      const localY = event.clientY - rect.top
-      // 仅在黑色容器的地图区内缩放白地图；黑色框本身不缩放
-      if (
-        !board ||
-        localX < board.x ||
-        localX >= board.x + board.mapW ||
-        localY < board.y ||
-        localY >= board.y + board.mapH
-      ) {
-        return
-      }
       const scale = mapRender.world.scale
       const delta = event.deltaY > 0 ? 0.9 : 1.1
-      const next = Math.min(8, Math.max(0.15, scale.x * delta))
+      const next = mapRender.clampWorldScale(scale.x * delta)
       scale.set(next, next)
       mapRender.centerOnMap()
     }, { passive: false })
@@ -406,22 +334,11 @@ export default function () {
       }
     }
 
-    // 禁止拖动画布；仅保留重定位/画路径点击（右侧控件带忽略）
+    // 禁止拖动画布；仅保留重定位/画路径点击
     app.canvas.addEventListener('pointerdown', event => {
       event.preventDefault()
       event.stopPropagation()
       const pos = canvasPos(event)
-      mapRender.layoutBoard()
-      const board = mapRender.boardRect
-      if (
-        !board ||
-        pos.x < board.x ||
-        pos.x >= board.x + board.mapW ||
-        pos.y < board.y ||
-        pos.y >= board.y + board.mapH
-      ) {
-        return
-      }
       if (mapRender.changeLocation) {
         mapRender.changePose(mapRender.globalToRos(pos.x, pos.y))
       } else if (mapRender.changeDirection) {
@@ -460,7 +377,7 @@ export default function () {
           event.touches[0].clientY - event.touches[1].clientY
         )
         const scaleRatio = currentDistance / mapRender.initialDistance
-        const next = Math.min(8, Math.max(0.15, scaleRatio * mapRender.initialScale))
+        const next = mapRender.clampWorldScale(scaleRatio * mapRender.initialScale)
         mapRender.world.scale.set(next, next)
         mapRender.centerOnMap()
       }
@@ -505,10 +422,10 @@ export default function () {
       if (invert && x >= 0) x = 100 - x
       const o = i * 4
       if (x < 0) {
-        // 未知：深灰可见，不再几乎透明黑
-        texturePixels[o] = 48
-        texturePixels[o + 1] = 48
-        texturePixels[o + 2] = 48
+        // 未知：贴近白底，去掉「大黑框」观感
+        texturePixels[o] = 255
+        texturePixels[o + 1] = 255
+        texturePixels[o + 2] = 255
         texturePixels[o + 3] = 255
       } else {
         const grayScale = Math.max(0, Math.min(255, ((100 - x) / 100) * 255))
@@ -856,26 +773,32 @@ export default function () {
   /**
    * 重建 world 内容；按黑色容器尺寸适配白底地图初始比例
    */
+  mapRender.updateFitScale = () => {
+    if (!mapRender.boardRect || !mapRender.mapInfo) return
+    const board = mapRender.boardRect
+    const info = mapRender.mapInfo
+    const mapW = Math.max(info.width * info.resolution, 1)
+    const mapH = Math.max(info.height * info.resolution, 1)
+    let W = mapW * 1.06
+    let H = mapH * 1.06
+    const aspect = board.mapH / Math.max(board.mapW, 1)
+    if (aspect > H / W) H = W * aspect
+    else W = H / aspect
+    const s = Math.min(board.mapW / W, board.mapH / H)
+    mapRender.fitScale = s
+    // 缩小不要太小（接近铺满即可）；放大有上限，且始终裁切在容器内
+    mapRender.minScale = s * 0.95
+    mapRender.maxScale = s * 5
+  }
+
   mapRender.updateStage = () => {
     if (!mapRender.app || !mapRender.canvas) {
       return
     }
     mapRender.ensureLayers()
-    mapRender.layoutBoard()
-    const board = mapRender.boardRect
-    const info = mapRender.mapInfo
-    const mapW = info ? info.width * info.resolution : 10
-    const mapH = info ? info.height * info.resolution : 10
-    let W = Math.max(mapW, 1) * 1.08
-    let H = Math.max(mapH, 1) * 1.08
-    const aspect = board.mapH / Math.max(board.mapW, 1)
-    if (aspect > H / W) {
-      H = W * aspect
-    } else {
-      W = H / aspect
-    }
-    // 等比例塞进黑色容器的地图区；黑色框尺寸不变
-    const s = Math.min(board.mapW / W, board.mapH / H)
+    mapRender.layoutViewport()
+    mapRender.updateFitScale()
+    const s = mapRender.clampWorldScale(mapRender.fitScale)
     mapRender.world.scale.set(s, s)
     mapRender.app.stage.scale.set(1, 1)
     mapRender.app.stage.position.set(0, 0)
@@ -942,7 +865,7 @@ export default function () {
     return { x: rosX, y: rosY }
   }
 
-  /** 清空地图画板（未建图 / 取消后只留黑色容器） */
+  /** 清空地图画板 */
   mapRender.clearMap = () => {
     if (mapRender.map?.parent) {
       mapRender.map.parent.removeChild(mapRender.map)
@@ -965,7 +888,7 @@ export default function () {
       mapRender.world.scale.set(1, 1)
       mapRender.world.position.set(0, 0)
     }
-    mapRender.layoutBoard()
+    mapRender.layoutViewport()
   }
 
   return mapRender

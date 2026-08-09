@@ -87,17 +87,8 @@ function yawFromQuat (q) {
 }
 
 onMounted(async () => {
-  mapManager.onBoardLayout = (css) => {
-    railFrame.value = {
-      left: css.left,
-      top: css.top,
-      width: css.width,
-      height: css.height
-    }
-  }
-  await mapManager.init({ canvas: pixiContainer.value, railWidth: 184 })
-  // 无地图时也先画出黑色容器，右侧可放按钮
-  mapManager.layoutBoard?.()
+  await mapManager.init({ canvas: pixiContainer.value })
+  mapManager.layoutViewport?.()
   rosClient.loadMapRaw.value = (data) => {
     if (!mapBoardVisible.value && mapState.value === 'idle') return
     const first = !mapManager.map
@@ -228,110 +219,99 @@ function setNavMode (mode) {
 const isAutoNav = computed(() => navMode.value === 'auto')
 const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 
-/** 黑色格栅右侧控件带（相对 map-host，不是页面最右） */
-const railFrame = ref({ left: 0, top: 0, width: 184, height: 0 })
-const railStyle = computed(() => ({
-  left: `${railFrame.value.left}px`,
-  top: `${railFrame.value.top}px`,
-  width: `${railFrame.value.width}px`,
-  height: `${railFrame.value.height || 0}px`,
-  right: 'auto',
-  bottom: 'auto'
-}))
-
 </script>
 
 <template>
   <div class="amr-layout">
-    <!-- 整页即黑色格栅容器；右侧叠控件（不另开页面侧栏） -->
-    <div class="amr-map-host">
-      <canvas ref="pixiContainer" class="map-canvas"/>
+    <!-- 左侧：按钮 + 手柄 -->
+    <aside class="amr-rail">
+      <div class="amr-rail__top">
+        <div v-if="isMonitorWorkspace" class="amr-rail__modes">
+          <q-btn-toggle
+            dense
+            unelevated
+            toggle-color="primary"
+            :options="[
+              { label: $t('nav_mode_manual'), value: 'manual' },
+              { label: $t('nav_mode_auto'), value: 'auto' }
+            ]"
+            :model-value="navMode"
+            @update:model-value="setNavMode"
+          />
+        </div>
 
-      <aside class="amr-rail" :style="railStyle">
-        <div class="amr-rail__top">
-          <div v-if="isMonitorWorkspace" class="amr-rail__modes">
-            <q-btn-toggle
-              dense
-              unelevated
-              toggle-color="primary"
-              :options="[
-                { label: $t('nav_mode_manual'), value: 'manual' },
-                { label: $t('nav_mode_auto'), value: 'auto' }
-              ]"
-              :model-value="navMode"
-              @update:model-value="setNavMode"
+        <div class="amr-rail__tools column q-gutter-y-sm">
+          <template v-if="!mapEditMode">
+            <q-btn
+              v-if="focusing"
+              class="amr-rail__btn"
+              rounded outline no-wrap
+              :label="$t('amr2d_no_focus')"
+              color="negative"
+              icon="navigation"
+              @click="mapManager.focusing = false; focusing = false"
             />
-          </div>
+            <q-btn
+              v-else
+              class="amr-rail__btn"
+              rounded no-wrap
+              :label="$t('amr2d_focus')"
+              color="primary"
+              icon="navigation"
+              @click="mapManager.focusing = true; focusing = true"
+            />
+          </template>
 
-          <div class="amr-rail__tools column q-gutter-y-sm">
-            <template v-if="!mapEditMode">
+          <template v-if="isMappingWorkspace">
+            <map-create v-if="toolMode === 'default'" key="map-create"/>
+            <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
+            <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
+          </template>
+
+          <template v-else>
+            <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
+            <template v-if="isAutoNav">
               <q-btn
-                v-if="focusing"
-                class="amr-rail__btn"
-                rounded outline no-wrap
-                :label="$t('amr2d_no_focus')"
-                color="negative"
-                icon="navigation"
-                @click="mapManager.focusing = false; focusing = false"
-              />
-              <q-btn
-                v-else
                 class="amr-rail__btn"
                 rounded no-wrap
-                :label="$t('amr2d_focus')"
+                :outline="toolMode !== 'relocate'"
+                :label="$t('nav_relocate')"
+                color="accent"
+                icon="my_location"
+                @click="setTool('relocate')"
+              />
+              <q-btn
+                class="amr-rail__btn"
+                rounded no-wrap
+                :outline="toolMode !== 'goto'"
+                :label="$t('nav_goto')"
                 color="primary"
-                icon="navigation"
-                @click="mapManager.focusing = true; focusing = true"
+                icon="place"
+                @click="setTool('goto')"
+              />
+              <q-btn
+                v-if="!mapEditMode"
+                class="amr-rail__btn"
+                rounded no-wrap
+                :outline="toolMode !== 'patrol'"
+                :label="$t('patrol')"
+                color="secondary"
+                icon="flag"
+                @click="setTool('patrol')"
               />
             </template>
-
-            <template v-if="isMappingWorkspace">
-              <map-create v-if="toolMode === 'default'" key="map-create"/>
-              <map-selector v-if="toolMode === 'default' && mapState === 'idle'" key="map-selector"/>
-              <terminate-process v-if="toolMode === 'default'" key="terminate-process"/>
-            </template>
-
-            <template v-else>
-              <map-selector v-if="!mapEditMode" key="nav-map-selector"/>
-              <template v-if="isAutoNav">
-                <q-btn
-                  class="amr-rail__btn"
-                  rounded no-wrap
-                  :outline="toolMode !== 'relocate'"
-                  :label="$t('nav_relocate')"
-                  color="accent"
-                  icon="my_location"
-                  @click="setTool('relocate')"
-                />
-                <q-btn
-                  class="amr-rail__btn"
-                  rounded no-wrap
-                  :outline="toolMode !== 'goto'"
-                  :label="$t('nav_goto')"
-                  color="primary"
-                  icon="place"
-                  @click="setTool('goto')"
-                />
-                <q-btn
-                  v-if="!mapEditMode"
-                  class="amr-rail__btn"
-                  rounded no-wrap
-                  :outline="toolMode !== 'patrol'"
-                  :label="$t('patrol')"
-                  color="secondary"
-                  icon="flag"
-                  @click="setTool('patrol')"
-                />
-              </template>
-            </template>
-          </div>
+          </template>
         </div>
+      </div>
 
-        <div v-if="hasRailJoy" class="amr-rail__joy">
-          <slot name="rail-joy"/>
-        </div>
-      </aside>
+      <div v-if="hasRailJoy" class="amr-rail__joy">
+        <slot name="rail-joy"/>
+      </div>
+    </aside>
 
+    <!-- 右侧：白底地图容器（固定视口，缩放不溢出） -->
+    <div class="amr-map-host">
+      <canvas ref="pixiContainer" class="map-canvas"/>
       <RobotRelocate v-if="isMonitorWorkspace" ref="robotRelocate"/>
       <pose-manager v-if="isMonitorWorkspace && toolMode === 'patrol'"/>
       <patrol-mission-runner v-if="isMonitorWorkspace"/>
@@ -343,41 +323,24 @@ const railStyle = computed(() => ({
 .amr-layout {
   position: absolute;
   inset: 0;
-  background: #F2F3F5;
+  display: flex;
+  flex-direction: row;
+  background: #fff;
   overflow: hidden;
 }
 
-.amr-map-host {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #F2F3F5;
-}
-
-.map-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100% !important;
-  height: 100% !important;
-  touch-action: none;
-  user-select: none;
-  display: block;
-  z-index: 1;
-}
-
-/* 叠在黑色格栅右侧内侧（位置由 boardLayout 计算） */
 .amr-rail {
-  position: absolute;
+  flex: 0 0 11.5rem;
+  width: 11.5rem;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 0.65rem 0.55rem 0.75rem;
-  background: transparent;
+  padding: 0.75rem 0.6rem;
+  background: #fff;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   z-index: 30;
   overflow: hidden;
-  pointer-events: none;
 }
 
 .amr-rail__top {
@@ -386,12 +349,10 @@ const railStyle = computed(() => ({
   gap: 0.65rem;
   min-height: 0;
   overflow: auto;
-  pointer-events: none;
 }
 
 .amr-rail__modes {
   width: 100%;
-  pointer-events: auto;
 }
 .amr-rail__modes :deep(.q-btn-toggle) {
   width: 100%;
@@ -405,7 +366,6 @@ const railStyle = computed(() => ({
 
 .amr-rail__tools {
   width: 100%;
-  pointer-events: auto;
 }
 .amr-rail__tools :deep(.q-btn),
 .amr-rail__btn {
@@ -420,13 +380,25 @@ const railStyle = computed(() => ({
   align-items: flex-end;
   padding-top: 0.5rem;
   margin-top: auto;
-  pointer-events: none;
 }
-.amr-rail__joy :deep(.joy-unit) {
-  pointer-events: none;
+
+.amr-map-host {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
 }
-.amr-rail__joy :deep(.joy-key),
-.amr-rail__joy :deep(.joy-nipple) {
-  pointer-events: auto;
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: none;
+  user-select: none;
+  display: block;
+  z-index: 1;
 }
 </style>
