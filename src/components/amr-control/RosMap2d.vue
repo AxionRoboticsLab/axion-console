@@ -8,6 +8,7 @@ import MapSelector from 'components/amr-control/MapSelector.vue'
 import MapCreate from 'components/amr-control/MapCreate.vue'
 import PoseManager from 'components/map-pose/PoseManager.vue'
 import PatrolMissionRunner from 'components/map-pose/PatrolMissionRunner.vue'
+import { getActiveMap } from 'src/api/maps'
 import { useControlParams } from 'stores/control-params'
 import { useVisualization } from 'stores/visualization'
 import TerminateProcess from 'components/amr-control/TerminateProcess.vue'
@@ -44,7 +45,43 @@ provide('loadedMapId', loadedMapId)
 
 const navMode = inject('navMode', ref('auto'))
 
-watch(connected, value => {
+const mapManager = RosMapPixi()
+provide('mapManager', mapManager)
+const pixiContainer = ref(null)
+
+/**
+ * 刷新后从 DB 恢复「当前地图」(status=1)：
+ * - 写入 loadedMapId/Name，巡检点/导航才能用
+ * - rosbridge 已连时下发 load，拉齐栅格
+ */
+async function restoreActiveMapFromDb ({ publishLoad = true } = {}) {
+  if (!isMonitorWorkspace.value) return null
+  try {
+    const active = await getActiveMap()
+    if (!active?.id || !active.map_name) return null
+
+    const same =
+      loadedMapId.value === active.id &&
+      loadedMapName.value === active.map_name
+    loadedMapId.value = active.id
+    loadedMapName.value = active.map_name
+    keepMapOnIdle.value = true
+    mapBoardVisible.value = true
+
+    if (!publishLoad || !connected.value) return active
+    // 已有同名栅格则不必重复 load
+    if (same && mapManager.map) return active
+
+    rosClient.advertise('/map_command')
+    rosClient.publish('/map_command', { data: 'load ' + active.map_name })
+    return active
+  } catch (e) {
+    console.warn('[RosMap2d] restoreActiveMapFromDb failed', e)
+    return null
+  }
+}
+
+watch(connected, async value => {
   if (value) {
     rosClient.subscribe(controlParam.mapTopic)
     rosClient.subscribe('/robot_pose')
@@ -60,12 +97,9 @@ watch(connected, value => {
     if (visualization.laserScanEnable) rosClient.subscribe(visualization.laserScanTopic)
     if (visualization.trajectoryEnable) rosClient.subscribe(visualization.trajectoryTopic)
     if (visualization.costMapEnable) rosClient.subscribe(visualization.costMapTopic)
+    await restoreActiveMapFromDb({ publishLoad: true })
   }
 }, { immediate: true })
-
-const mapManager = RosMapPixi()
-provide('mapManager', mapManager)
-const pixiContainer = ref(null)
 const teleop = inject('teleop', null)
 const robotPose = inject('robotPose', null)
 const resetTeleopPose = inject('resetTeleopPose', () => {})
@@ -89,6 +123,8 @@ function yawFromQuat (q) {
 onMounted(async () => {
   await mapManager.init({ canvas: pixiContainer.value })
   mapManager.layoutViewport?.()
+  // 先同步 DB 当前地图，避免栅格已在但提示「请先加载地图」
+  await restoreActiveMapFromDb({ publishLoad: Boolean(connected.value) })
   rosClient.loadMapRaw.value = (data) => {
     if (!mapBoardVisible.value && mapState.value === 'idle') return
     const first = !mapManager.map
@@ -188,12 +224,14 @@ watch(mapState, value => {
     mapBoardVisible.value = false
     mapReady.value = false
     loadedMapName.value = ''
+    loadedMapId.value = null
     mapManager.clearMap?.()
     resetTeleopPose()
   } else if (value === 'terminating') {
     keepMapOnIdle.value = false
     mapReady.value = false
     loadedMapName.value = ''
+    loadedMapId.value = null
     resetTeleopPose()
   }
 })

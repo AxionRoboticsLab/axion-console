@@ -15,6 +15,12 @@ export function listMaps () {
   return unwrap(api.get('/maps')).then((data) => data || [])
 }
 
+/** 数据库中 status=1 的当前使用地图 */
+export async function getActiveMap () {
+  const maps = await listMaps()
+  return (maps || []).find((m) => m.status === 1) || null
+}
+
 export function upsertMap (mapName, fileReady = true) {
   return unwrap(api.post('/maps', {
     map_name: mapName,
