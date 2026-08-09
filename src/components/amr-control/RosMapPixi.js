@@ -212,7 +212,8 @@ export default function () {
 
     const app = new Application()
     await app.init({
-      background: getCssVar('info'),
+      // 中性底，避免整页大块 info 蓝；建图/导航共用
+      background: '#F2F3F5',
       resizeTo: option.canvas,
       canvas: option.canvas
     })

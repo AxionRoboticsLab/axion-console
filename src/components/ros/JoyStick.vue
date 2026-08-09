@@ -93,6 +93,25 @@ function pubVel (x, y, z) {
   }
 }
 
+function pressMove (dx, dy) {
+  linearX.value = dx * controlParams.linearRatio
+  linearY.value = dy * controlParams.linearRatio
+}
+
+function releaseMove () {
+  linearX.value = 0
+  linearY.value = 0
+}
+
+function pressTurn (dir) {
+  // dir: -1 左转（屏幕左），+1 右转
+  angular.value = dir * controlParams.angularRatio
+}
+
+function releaseTurn () {
+  angular.value = 0
+}
+
 function initKeyboardCtrl () {
   if (controlParams.keyboardMove) {
     document.onkeydown = (e) => {
@@ -170,8 +189,84 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="left" class="joystick-zone joystick-zone--left" v-show="visible"/>
-  <div ref="right" class="joystick-zone joystick-zone--right" v-show="visible"/>
+  <div class="joystick-wrap joystick-wrap--left" v-show="visible">
+    <div class="joy-dpad" aria-hidden="false">
+      <button
+        type="button"
+        class="joy-key joy-key--up"
+        aria-label="up"
+        @pointerdown.prevent="pressMove(0, 1)"
+        @pointerup.prevent="releaseMove"
+        @pointerleave.prevent="releaseMove"
+        @pointercancel.prevent="releaseMove"
+      >
+        <q-icon name="keyboard_arrow_up" size="28px"/>
+      </button>
+      <button
+        type="button"
+        class="joy-key joy-key--left"
+        aria-label="left"
+        @pointerdown.prevent="pressMove(-1, 0)"
+        @pointerup.prevent="releaseMove"
+        @pointerleave.prevent="releaseMove"
+        @pointercancel.prevent="releaseMove"
+      >
+        <q-icon name="keyboard_arrow_left" size="28px"/>
+      </button>
+      <button
+        type="button"
+        class="joy-key joy-key--right"
+        aria-label="right"
+        @pointerdown.prevent="pressMove(1, 0)"
+        @pointerup.prevent="releaseMove"
+        @pointerleave.prevent="releaseMove"
+        @pointercancel.prevent="releaseMove"
+      >
+        <q-icon name="keyboard_arrow_right" size="28px"/>
+      </button>
+      <button
+        type="button"
+        class="joy-key joy-key--down"
+        aria-label="down"
+        @pointerdown.prevent="pressMove(0, -1)"
+        @pointerup.prevent="releaseMove"
+        @pointerleave.prevent="releaseMove"
+        @pointercancel.prevent="releaseMove"
+      >
+        <q-icon name="keyboard_arrow_down" size="28px"/>
+      </button>
+    </div>
+    <div ref="left" class="joystick-zone"/>
+  </div>
+
+  <div class="joystick-wrap joystick-wrap--right" v-show="visible">
+    <div class="joy-dpad joy-dpad--turn">
+      <button
+        type="button"
+        class="joy-key joy-key--left"
+        aria-label="turn-left"
+        @pointerdown.prevent="pressTurn(-1)"
+        @pointerup.prevent="releaseTurn"
+        @pointerleave.prevent="releaseTurn"
+        @pointercancel.prevent="releaseTurn"
+      >
+        <q-icon name="rotate_left" size="26px"/>
+      </button>
+      <button
+        type="button"
+        class="joy-key joy-key--right"
+        aria-label="turn-right"
+        @pointerdown.prevent="pressTurn(1)"
+        @pointerup.prevent="releaseTurn"
+        @pointerleave.prevent="releaseTurn"
+        @pointercancel.prevent="releaseTurn"
+      >
+        <q-icon name="rotate_right" size="26px"/>
+      </button>
+    </div>
+    <div ref="right" class="joystick-zone"/>
+  </div>
+
   <q-page-sticky v-show="$q.screen.gt.xs" :position="props.togglePosition" :offset="[15, 15]">
     <q-btn-dropdown v-show="visible" color="primary" :label="$t('joystick_params')" :menu-offset="props.togglePosition === 'bottom-right'?[0,10]:[65,10]">
       <q-card-section>
@@ -191,18 +286,80 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.joystick-wrap {
+  position: absolute;
+  bottom: 0.5rem;
+  width: min(46vw, 300px);
+  height: min(46vh, 300px);
+  z-index: 20;
+  pointer-events: none;
+}
+.joystick-wrap--left {
+  left: 0.25rem;
+}
+.joystick-wrap--right {
+  right: 0.25rem;
+}
+
 .joystick-zone {
   position: absolute;
-  bottom: 0;
-  width: min(42vw, 280px);
-  height: min(42vh, 280px);
-  z-index: 20;
+  inset: 0;
   pointer-events: auto;
 }
-.joystick-zone--left {
-  left: 0;
+
+.joy-dpad {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
 }
-.joystick-zone--right {
-  right: 0;
+
+.joy-key {
+  position: absolute;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(33, 33, 33, 0.78);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+.joy-key:active {
+  background: rgba(25, 118, 210, 0.2);
+  color: #1565c0;
+}
+
+.joy-key--up {
+  left: 50%;
+  top: 6%;
+  transform: translateX(-50%);
+}
+.joy-key--down {
+  left: 50%;
+  bottom: 6%;
+  transform: translateX(-50%);
+}
+.joy-key--left {
+  left: 6%;
+  top: 55%;
+  transform: translateY(-50%);
+}
+.joy-key--right {
+  right: 6%;
+  top: 55%;
+  transform: translateY(-50%);
+}
+
+.joy-dpad--turn .joy-key--left,
+.joy-dpad--turn .joy-key--right {
+  top: 55%;
 }
 </style>
