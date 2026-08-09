@@ -169,7 +169,10 @@ function drawTour (start, ordered) {
     pose: p.pose
   })))
   if (charge) {
-    mapManager?.drawChargeMarker?.(charge)
+    mapManager?.drawChargeMarker?.({
+      ...charge,
+      name: charge.name || t('charge_point')
+    })
   }
 }
 

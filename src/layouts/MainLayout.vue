@@ -194,7 +194,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
@@ -281,7 +281,6 @@ async function onLogout () {
 }
 
 onMounted(async () => {
-  runtime.startTicker()
   if (auth.isAuthenticated) {
     try {
       await auth.fetchMe()
@@ -289,10 +288,6 @@ onMounted(async () => {
       // token 失效由 axios 拦截处理
     }
   }
-})
-
-onUnmounted(() => {
-  runtime.stopTicker()
 })
 </script>
 

@@ -1,6 +1,7 @@
 import { provide, ref } from 'vue'
 import { Notify } from 'quasar'
 import { useControlParams } from 'stores/control-params'
+import { useRobotRuntime } from 'stores/robot-runtime'
 import { useI18n } from 'vue-i18n'
 import { v4 as uuidv4 } from 'uuid'
 import { useVisualization } from 'stores/visualization'
@@ -16,9 +17,11 @@ function createRosClient () {
   const url = controlParams.rosUrl
   let ws = null
   const advertised = new Set()
+  const robotRuntime = useRobotRuntime()
   const rosClient = {
     robotPose: ref({}),
     navState: ref('idle'),
+    robotStatus: ref(null),
     loadMapData: ref(function (data) {}),
     loadMapRaw: ref(function (data) {}),
     loadLaserScan: ref(function (data) {}),
@@ -41,13 +44,18 @@ function createRosClient () {
 
   function resolveType (topic, type) {
     if (type) return type
-    if (topic === '/map_command' || topic === '/map_state' || topic === '/nav_state') {
+    if (
+      topic === '/map_command' ||
+      topic === '/map_state' ||
+      topic === '/nav_state' ||
+      topic === '/robot_status'
+    ) {
       return stringType()
     }
     if (topic === controlParams.cmdTopic) {
       return isRos2() ? 'geometry_msgs/msg/Twist' : 'geometry_msgs/Twist'
     }
-    if (topic === '/robot_pose' || topic === '/goal_pose') {
+    if (topic === '/robot_pose' || topic === '/goal_pose' || topic === '/charge_pose') {
       return isRos2() ? 'geometry_msgs/msg/PoseStamped' : 'geometry_msgs/PoseStamped'
     }
     if (topic === '/initialpose') {
@@ -94,11 +102,13 @@ function createRosClient () {
     ws.onclose = () => {
       connected.value = false
       advertised.clear()
+      robotRuntime.setOnline(false)
       if (alive) reConnect()
     }
 
     ws.onerror = () => {
       connected.value = false
+      robotRuntime.setOnline(false)
       reConnect()
     }
 
@@ -110,6 +120,9 @@ function createRosClient () {
       rosClient.advertise(controlParams.cmdTopic)
       rosClient.advertise('/initialpose')
       rosClient.advertise('/goal_pose')
+      rosClient.advertise('/charge_pose')
+      rosClient.subscribe('/robot_status')
+      robotRuntime.setOnline(true)
       Notify.create({ type: 'positive', message: t('notify_ros_connect') })
     }
 
@@ -152,6 +165,12 @@ function createRosClient () {
       case costMapTopic: rosClient.loadCostMap.value(rosObject.msg); break
       case '/map_state': rosClient.mapState.value = rosObject.msg.data; break
       case '/nav_state': rosClient.navState.value = rosObject.msg.data; break
+      case '/robot_status': {
+        const data = rosObject.msg?.data ?? rosObject.msg
+        rosClient.robotStatus.value = data
+        robotRuntime.applyStatus(data)
+        break
+      }
     }
   }
 
@@ -268,6 +287,7 @@ function provideRos (rosClient) {
   provide('mapState', rosClient.mapState)
   provide('navState', rosClient.navState)
   provide('robotPose', rosClient.robotPose)
+  provide('robotStatus', rosClient.robotStatus)
   provide('subscribe', rosClient.subscribe)
   provide('unsubscribe', rosClient.unsubscribe)
   provide('publish', rosClient.publish)

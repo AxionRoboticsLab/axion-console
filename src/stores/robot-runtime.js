@@ -1,43 +1,28 @@
 import { defineStore } from 'pinia'
 
-const STORAGE_KEY = 'axion.robot.runtime.v1'
-const TICK_MS = 60_000
-
-function loadPersisted () {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw)
-  } catch (_) {
-    return null
-  }
-}
-
 function clampBattery (n) {
-  return Math.max(0, Math.min(100, Math.round(n)))
+  return Math.max(0, Math.min(100, Math.round(Number(n) || 0)))
 }
 
 /**
- * 机器人运行态（前端 mock）：电量、充电、机型信息。
- * 在充电点附近 → 充电中，每分钟 +1%；否则每分钟 -1%。
+ * 机器人运行态：由 ROS `/robot_status` 推送驱动（mock_nav 默认 1Hz）。
  */
 export const useRobotRuntime = defineStore('robot-runtime', {
-  state: () => {
-    const saved = loadPersisted()
-    return {
-      model: 'Demo-v1',
-      version: 'v0.1.0',
-      sn: 'AX-DEMO-0001',
-      battery: saved?.battery != null ? clampBattery(saved.battery) : 100,
-      charging: false,
-      nearCharge: false,
-      online: true,
-      /** idle | navigating | patrol | paused | offline */
-      workState: 'idle',
-      lastTickAt: saved?.lastTickAt || Date.now(),
-      _timer: null
-    }
-  },
+  state: () => ({
+    model: 'Demo-v1',
+    version: 'v0.1.0',
+    sn: 'AX-DEMO-0001',
+    battery: 100,
+    charging: false,
+    nearCharge: false,
+    online: false,
+    /** idle | navigating | patrol | paused | offline */
+    workState: 'idle',
+    navState: 'idle',
+    /** 最近一次收到 /robot_status 的时间 */
+    lastStatusAt: 0,
+    source: 'idle'
+  }),
 
   getters: {
     batteryLabel (state) {
@@ -51,7 +36,6 @@ export const useRobotRuntime = defineStore('robot-runtime', {
       if (state.charging || state.nearCharge) return 'battery_charging_full'
       if (state.battery >= 85) return 'battery_full'
       if (state.battery >= 40) return 'battery_std'
-      if (state.battery >= 15) return 'battery_alert'
       return 'battery_alert'
     },
     batteryColor (state) {
@@ -63,47 +47,45 @@ export const useRobotRuntime = defineStore('robot-runtime', {
   },
 
   actions: {
-    persist () {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          battery: this.battery,
-          lastTickAt: this.lastTickAt
-        }))
-      } catch (_) { /* ignore */ }
+    /**
+     * 应用 /robot_status JSON（std_msgs/String.data）
+     */
+    applyStatus (raw) {
+      let data = raw
+      if (typeof raw === 'string') {
+        try {
+          data = JSON.parse(raw)
+        } catch (_) {
+          return
+        }
+      }
+      if (!data || typeof data !== 'object') return
+
+      if (data.battery != null) this.battery = clampBattery(data.battery)
+      if (data.charging != null) {
+        this.charging = Boolean(data.charging)
+        this.nearCharge = this.charging
+      }
+      if (data.model) this.model = String(data.model)
+      if (data.version) this.version = String(data.version)
+      if (data.sn) this.sn = String(data.sn)
+      if (data.online != null) this.online = Boolean(data.online)
+      else this.online = true
+      if (data.work_state) this.workState = String(data.work_state)
+      if (data.nav_state) this.navState = String(data.nav_state)
+      this.lastStatusAt = Date.now()
+      this.source = 'ros'
     },
 
-    /** 根据距上次 tick 的分钟数补算电量（切页/刷新也生效） */
-    catchUpTicks () {
-      const now = Date.now()
-      const elapsed = now - (this.lastTickAt || now)
-      const mins = Math.floor(elapsed / TICK_MS)
-      if (mins <= 0) return
-      const delta = (this.charging || this.nearCharge) ? mins : -mins
-      this.battery = clampBattery(this.battery + delta)
-      this.lastTickAt += mins * TICK_MS
-      this.persist()
-    },
-
-    tickOnce () {
-      this.catchUpTicks()
-      const now = Date.now()
-      if (now - this.lastTickAt < TICK_MS - 500) return
-      const delta = (this.charging || this.nearCharge) ? 1 : -1
-      this.battery = clampBattery(this.battery + delta)
-      this.lastTickAt = now
-      this.persist()
-    },
-
-    setNearCharge (near) {
-      const v = Boolean(near)
-      if (this.nearCharge === v && this.charging === v) return
-      this.catchUpTicks()
-      this.nearCharge = v
-      this.charging = v
-    },
-
+    /** 本地巡检态覆盖（不改电量，电量以 topic 为准） */
     setWorkState (s) {
-      this.workState = s || 'idle'
+      if (!s) return
+      // 有 ROS 推送时保留 navigating；巡检会话可标为 patrol/paused
+      if (s === 'patrol' || s === 'paused' || s === 'offline') {
+        this.workState = s
+      } else if (!this.lastStatusAt || Date.now() - this.lastStatusAt > 5000) {
+        this.workState = s
+      }
     },
 
     setOnline (v) {
@@ -111,33 +93,27 @@ export const useRobotRuntime = defineStore('robot-runtime', {
       if (!this.online) this.workState = 'offline'
     },
 
-    startTicker () {
-      if (this._timer) return
-      this.catchUpTicks()
-      this._timer = setInterval(() => this.tickOnce(), TICK_MS)
-    },
-
-    stopTicker () {
-      if (this._timer) {
-        clearInterval(this._timer)
-        this._timer = null
+    setNearCharge (near) {
+      // 仅作 UI 兜底；有 topic 时以 charging 字段为准
+      this.nearCharge = Boolean(near)
+      if (!this.lastStatusAt || Date.now() - this.lastStatusAt > 3000) {
+        this.charging = this.nearCharge
       }
     },
 
-    /** mock 关机 */
+    /** @deprecated 电量由 /robot_status 驱动，保留空实现避免旧调用报错 */
+    startTicker () {},
+    stopTicker () {},
+
     shutdown () {
       this.online = false
       this.workState = 'offline'
       this.charging = false
     },
 
-    /** mock 重启 */
     reboot () {
       this.online = true
       this.workState = 'idle'
-      this.battery = clampBattery(this.battery)
-      this.lastTickAt = Date.now()
-      this.persist()
     }
   }
 })

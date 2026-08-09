@@ -1,6 +1,6 @@
 import { getCssVar } from 'quasar'
 import { useControlParams } from 'stores/control-params'
-import { Application, Sprite, Container, Texture, Graphics, Assets, BufferImageSource } from 'pixi.js'
+import { Application, Sprite, Container, Texture, Graphics, Assets, BufferImageSource, Text } from 'pixi.js'
 
 const controlParam = useControlParams()
 
@@ -357,6 +357,12 @@ export default function () {
       icon.scale.set(worldSize / tw)
       root.addChild(icon)
 
+      const chargeName = pt.name || 'charge'
+      root.addChild(mapRender.makeWorldLabel(chargeName, {
+        fill: 0xE65100,
+        offsetY: -0.48
+      }))
+
       root.position.set(pt.x, -pt.y)
       mapRender.addToWorld(root)
       mapRender.chargeMarker = root
@@ -445,20 +451,28 @@ export default function () {
     ;(poseList || []).forEach(p => {
       const pos = p.pose || p
       if (!pos?.position || !pos?.orientation) return
+      const root = new Container()
       const point = new Sprite(mapRender.poseTexture)
       point.anchor.set(0.5)
-      point.alpha = 0.66
+      point.alpha = 0.85
       const scale = controlParam.arrowScale / mapRender.poseTexture.width
       point.scale.set(scale)
       point.tint = getCssVar('info')
-
-      point.x = pos.position.x
-      point.y = -pos.position.y
       // 与机器人箭头同一朝向约定（yaw=0 朝上）
       point.rotation = -mapRender.quaternionToTheta(pos.orientation) * Math.PI / 180
-      point.label = p.header?.seq || p.id
+      root.addChild(point)
 
-      mapRender.poseContainer.addChild(point)
+      const name = p.name || p.label || p.header?.frame_id
+      if (name) {
+        root.addChild(mapRender.makeWorldLabel(name, { fill: 0x00695C }))
+      }
+
+      root.x = pos.position.x
+      root.y = -pos.position.y
+      root.label = p.header?.seq || p.id
+      root.pointName = name || ''
+
+      mapRender.poseContainer.addChild(root)
     })
 
     if (mapRender.poseContainer.parent !== mapRender.world) {
@@ -962,7 +976,10 @@ export default function () {
     mapRender.addToWorld(layer)
     mapRender.path = layer
 
-    // 保证目标高亮在路径之上
+    // 导航蓝线刷新后，把最优巡检环与点位再抬到上层（避免被盖住）
+    if (mapRender.patrolTour) mapRender.addToWorld(mapRender.patrolTour)
+    if (mapRender.poseContainer) mapRender.addToWorld(mapRender.poseContainer)
+    if (mapRender.chargeMarker) mapRender.addToWorld(mapRender.chargeMarker)
     if (mapRender.goalHalo) mapRender.addToWorld(mapRender.goalHalo)
     if (mapRender.target) mapRender.addToWorld(mapRender.target)
     if (mapRender.robot) mapRender.addToWorld(mapRender.robot)
@@ -986,15 +1003,18 @@ export default function () {
     if (!mapRender.app) return
     mapRender.clearPatrolTour()
     if (!pts || pts.length < 2) return
+    mapRender._patrolTourPts = pts.map((p) => ({ x: p.x, y: p.y }))
     const layer = new Graphics()
-    // 浅青绿：最优巡检顺序示意，不抢导航蓝线
-    mapRender.strokePoly(layer, pts, 0x80CBC4, 0.07, 0.55)
+    // 中等青绿：可见且不抢导航蓝线
+    mapRender.strokePoly(layer, pts, 0x26A69A, 0.1, 0.78)
     for (let i = 1; i < pts.length; i++) {
-      layer.circle(pts[i].x, -pts[i].y, 0.07)
-      layer.fill({ color: 0x80CBC4, alpha: 0.35 })
+      layer.circle(pts[i].x, -pts[i].y, 0.09)
+      layer.fill({ color: 0x26A69A, alpha: 0.5 })
     }
     mapRender.addToWorld(layer)
     mapRender.patrolTour = layer
+    if (mapRender.poseContainer) mapRender.addToWorld(mapRender.poseContainer)
+    if (mapRender.chargeMarker) mapRender.addToWorld(mapRender.chargeMarker)
     if (mapRender.target) mapRender.addToWorld(mapRender.target)
     if (mapRender.robot) mapRender.addToWorld(mapRender.robot)
   }
@@ -1004,6 +1024,28 @@ export default function () {
       mapRender.patrolTour.parent.removeChild(mapRender.patrolTour)
     }
     mapRender.patrolTour = null
+    mapRender._patrolTourPts = null
+  }
+
+  /** 世界坐标文字标签（巡检点 / 充电点名称） */
+  mapRender.makeWorldLabel = (text, opts = {}) => {
+    const label = new Text({
+      text: String(text || ''),
+      style: {
+        fontFamily: 'DIN Alternate, Segoe UI, Microsoft YaHei, sans-serif',
+        fontSize: 26,
+        fontWeight: '600',
+        fill: opts.fill ?? 0x37474F,
+        stroke: { color: 0xffffff, width: 4 },
+        align: 'center'
+      }
+    })
+    label.anchor.set(0.5, 1)
+    // 约 0.28m 字高，随世界缩放
+    const worldH = opts.worldHeight ?? 0.28
+    label.scale.set(worldH / 26)
+    label.y = opts.offsetY ?? -0.32
+    return label
   }
 
   /** 结束任务后：取消跟随、缩放回全图、地图居中（避免格栅偏到一角留白） */

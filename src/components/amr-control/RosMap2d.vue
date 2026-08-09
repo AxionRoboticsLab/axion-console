@@ -96,8 +96,10 @@ watch(connected, async value => {
   if (value) {
     rosClient.subscribe(controlParam.mapTopic)
     rosClient.subscribe('/robot_pose')
+    rosClient.subscribe('/robot_status')
     rosClient.subscribe('/map_state')
     rosClient.advertise('/map_command')
+    rosClient.advertise('/charge_pose')
     if (isMonitorWorkspace.value) {
       rosClient.subscribe('/nav_state')
     }
@@ -402,6 +404,25 @@ function setNavMode (mode) {
 const isAutoNav = computed(() => navMode.value === 'auto')
 const hasRailJoy = computed(() => Boolean(slots['rail-joy']))
 
+/** 把充电点同步给 mock_nav（/charge_pose），用于 /robot_status.charging */
+function publishChargePose (pt) {
+  if (!pt || !Number.isFinite(pt.x) || !Number.isFinite(pt.y) || !connected.value) return
+  const yaw = Number(pt.yaw) || 0
+  rosClient.advertise('/charge_pose')
+  rosClient.publish('/charge_pose', {
+    header: stampHeader(),
+    pose: {
+      position: { x: pt.x, y: pt.y, z: 0 },
+      orientation: {
+        x: 0,
+        y: 0,
+        z: Math.sin(yaw / 2),
+        w: Math.cos(yaw / 2)
+      }
+    }
+  })
+}
+
 async function refreshChargeMarker () {
   const id = loadedMapId.value
   if (!id) {
@@ -414,7 +435,8 @@ async function refreshChargeMarker () {
     const pt = await getChargePoint(id)
     if (pt) {
       chargePose.value = { x: pt.x, y: pt.y, yaw: pt.yaw || 0 }
-      mapManager.drawChargeMarker?.(pt)
+      mapManager.drawChargeMarker?.({ ...pt, name: pt.name || t('charge_point') })
+      publishChargePose(chargePose.value)
       const live = mapManager.pose?.position || robotPose?.value?.pose?.position
       if (live) syncChargeStateFromPose(live.x, live.y)
     } else {
@@ -433,7 +455,8 @@ async function applyChargeAtRobot (mapId, x, y, yaw) {
   try {
     const pt = await setChargePoint(mapId, { x, y, yaw, name: 'charge' })
     chargePose.value = { x: pt.x, y: pt.y, yaw: pt.yaw || 0 }
-    mapManager.drawChargeMarker?.(pt)
+    mapManager.drawChargeMarker?.({ ...pt, name: pt.name || t('charge_point') })
+    publishChargePose(chargePose.value)
     syncChargeStateFromPose(x, y)
     Notify.create({ type: 'positive', message: t('charge_point_set') })
   } catch (e) {
@@ -482,6 +505,11 @@ async function setChargeAtRobot () {
 }
 
 watch(loadedMapId, () => { refreshChargeMarker() })
+
+// 重连后把充电点再推给 mock_nav
+watch(connected, (ok) => {
+  if (ok && chargePose.value) publishChargePose(chargePose.value)
+})
 
 </script>
 
