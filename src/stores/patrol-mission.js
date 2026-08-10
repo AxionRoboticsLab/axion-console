@@ -29,7 +29,9 @@ export const usePatrolMission = defineStore('patrol-mission', {
     phase: 'idle',
     returning: false,
     /** 手动执行后进入监控页时自动开启跟随 */
-    followOnEnter: false
+    followOnEnter: false,
+    /** true：本页手动执行，由控制台发 /goal_pose（边缘执行器会跳过） */
+    driveLocal: false
   }),
 
   getters: {
@@ -73,6 +75,8 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.startedAt = run.startedAt || new Date().toISOString().slice(0, 19).replace('T', ' ')
       this.phase = 'planning'
       if (opts.follow) this.followOnEnter = true
+      // 手动执行 / 恢复：控制台负责发目标
+      if (opts.drive || opts.follow || opts.resume) this.driveLocal = true
     },
 
     /** @deprecated 兼容旧本地执行 */
@@ -139,6 +143,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.paused = false
       this.returning = false
       this.useServerOrder = false
+      this.driveLocal = false
       this.phase = ok ? 'done' : 'cancelled'
     },
 
@@ -165,6 +170,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.phase = 'idle'
       this.returning = false
       this.followOnEnter = false
+      this.driveLocal = false
     },
 
     consumeFollowOnEnter () {

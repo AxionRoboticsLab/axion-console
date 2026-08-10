@@ -24,9 +24,11 @@ const syncRobotToDefaultStart = inject('syncRobotToDefaultStart', null)
 const syncRobotToPose = inject('syncRobotToPose', null)
 const mapReady = inject('mapReady', ref(false))
 const loadedMapId = inject('loadedMapId', ref(null))
-/** global：执行由 edge-agent 负责，本组件只做地图 UI / 控制条 */
+/** global 且非本页驱动：仅展示；手动执行 driveLocal 时由本组件发 goal */
 const patrolDriverMode = inject('patrolDriverMode', ref('local'))
-const isUiOnly = computed(() => patrolDriverMode?.value === 'global')
+const isUiOnly = computed(
+  () => patrolDriverMode?.value === 'global' && !mission.driveLocal
+)
 
 let lastAdvanceAt = 0
 let startedRunId = null
