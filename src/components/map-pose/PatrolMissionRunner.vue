@@ -4,7 +4,7 @@
  */
 import { Notify } from 'quasar'
 import { useI18n } from 'vue-i18n'
-import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getChargePoint } from 'src/api/maps'
 import { listPatrolRuns, patrolRunAction } from 'src/api/patrol-tasks'
 import { usePatrolMission } from 'stores/patrol-mission'
@@ -24,11 +24,6 @@ const syncRobotToDefaultStart = inject('syncRobotToDefaultStart', null)
 const syncRobotToPose = inject('syncRobotToPose', null)
 const mapReady = inject('mapReady', ref(false))
 const loadedMapId = inject('loadedMapId', ref(null))
-/** global 且非本页驱动：仅展示；手动执行 driveLocal 时由本组件发 goal */
-const patrolDriverMode = inject('patrolDriverMode', ref('local'))
-const isUiOnly = computed(
-  () => patrolDriverMode?.value === 'global' && !mission.driveLocal
-)
 
 let lastAdvanceAt = 0
 let startedRunId = null
@@ -39,7 +34,7 @@ const chargePoint = ref(null)
 
 const CHARGE_NEAR_M = 0.35
 /** 认领调度器提升为 running、但前端尚未接管的任务 */
-const CLAIM_POLL_MS = 12000
+const CLAIM_POLL_MS = 8000
 
 function stampHeader () {
   const now = Date.now()
@@ -217,7 +212,7 @@ function takeNextRun (resp) {
   const next = resp?.next_run || resp?.nextRun
   if (!next?.id) return
   try {
-    mission.requestFromRun(next)
+    mission.requestFromRun(next, { drive: true })
   } catch (e) {
     console.warn('[PatrolMission] claim next run failed', e)
   }
@@ -228,7 +223,6 @@ function takeNextRun (resp) {
  * 若当前无本地会话，则认领并开跑（调度接力 / 页面重开）。
  */
 async function claimOrphanedRunning () {
-  if (isUiOnly.value) return
   if (mission.active || mission.pending) return
   const mapId = loadedMapId?.value
   if (!mapId) return
@@ -236,7 +230,7 @@ async function claimOrphanedRunning () {
     const runs = await listPatrolRuns({ mapId, status: 'running' })
     const orphan = (runs || []).find((r) => r?.id && r.id !== startedRunId)
     if (!orphan) return
-    mission.requestFromRun(orphan)
+    mission.requestFromRun(orphan, { drive: true })
     Notify.create({
       type: 'info',
       message: t('patrol_task_execute_jump', { name: orphan.name || orphan.task_name || '' })
@@ -307,30 +301,11 @@ function advance () {
 }
 
 async function tryStartPending () {
-  if (isUiOnly.value) {
-    // 边缘端执行：监控页只展示路线与跟随，不发 goal
-    if (mission.pending && mission.points.length && startedRunId !== mission.runId) {
-      enterAutoFollow()
-      await ensureChargePoint()
-      const start = await resolveStart()
-      let ordered = mission.ordered
-      if (!ordered.length) {
-        ordered = planPatrolOrder(start || { x: 0, y: 0 }, mission.points)
-        mission.setOrdered(ordered)
-      }
-      if (start) drawTour(start, ordered)
-      mission.beginRunning()
-      startedRunId = mission.runId
-    } else if (mission.active && mission.ordered.length) {
-      const start = await resolveStart()
-      if (start) drawTour(start, mission.ordered)
-    }
-    return
-  }
   if (!mission.pending || !mission.points.length) return
   if (startedRunId === mission.runId) return
   if (!mapReady?.value && !mapManager?.mapInfo) return
 
+  mission.driveLocal = true
   enterAutoFollow()
   await ensureChargePoint()
 
@@ -415,16 +390,6 @@ async function stopMission () {
 
 // 任务结果页取消等：会话结束后也恢复全图格栅
 watch(
-  () => [mission.active, mission.ordered, isUiOnly.value],
-  async () => {
-    if (!isUiOnly.value || !mission.active || !mission.ordered.length) return
-    const start = await resolveStart()
-    if (start) drawTour(start, mission.ordered)
-  },
-  { deep: true }
-)
-
-watch(
   () => mission.active,
   (active, was) => {
     if (was && !active && !mission.pending) {
@@ -440,7 +405,6 @@ watch(
 )
 
 watch(navState, (state, prev) => {
-  if (isUiOnly.value) return
   if (!mission.active || mission.paused) return
   const hit = state === 'arrived' || (prev === 'navigating' && state === 'idle')
   if (!hit) return
@@ -460,10 +424,8 @@ watch(() => loadedMapId?.value, () => {
 onMounted(() => {
   resumeActiveUi()
   tryStartPending()
-  if (!isUiOnly.value) {
-    void claimOrphanedRunning()
-    claimTimer = setInterval(() => { void claimOrphanedRunning() }, CLAIM_POLL_MS)
-  }
+  void claimOrphanedRunning()
+  claimTimer = setInterval(() => { void claimOrphanedRunning() }, CLAIM_POLL_MS)
   ensureChargePoint().then((c) => {
     if (c) mapManager?.drawChargeMarker?.(c)
   })

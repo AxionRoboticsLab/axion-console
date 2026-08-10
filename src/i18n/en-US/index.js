@@ -180,7 +180,7 @@ export default {
   patrol_task_auto_record: 'Auto-record bag',
   patrol_task_auto_record_hint: 'On by default; when off, details hide playback',
   patrol_replay_disabled: 'Auto-record was off for this run — no playback',
-  patrol_task_started_background: '“{name}” queued/started (edge executor, no console login needed)',
+  patrol_task_started_background: '“{name}” taken over by console (no page jump)',
   patrol_task_execute_jump: 'Opening live monitor and following “{name}”',
   patrol_replay_title: 'Bag playback',
   patrol_replay_hint: 'Rosbag / video playback for this run. Demo timeline until a real bag URL is attached.',

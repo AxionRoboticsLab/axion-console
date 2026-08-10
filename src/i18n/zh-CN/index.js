@@ -180,7 +180,7 @@ export default {
   patrol_task_auto_record: '执行时自动录包',
   patrol_task_auto_record_hint: '默认开启；关闭后详情不显示回放区域',
   patrol_replay_disabled: '本次未开启自动录包，无回放',
-  patrol_task_started_background: '「{name}」已入队/开始（由边缘端执行，无需登录控制台）',
+  patrol_task_started_background: '「{name}」定时/排队任务已由控制台接手执行（无需跳转）',
   patrol_task_execute_jump: '正在跳转实时监控并跟随「{name}」',
   patrol_replay_title: '录包回放',
   patrol_replay_hint: '任务过程录包（rosbag）回放区；当前为演示时间轴，接入真实 bag/视频后可直接播放。',

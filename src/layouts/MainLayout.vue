@@ -189,15 +189,17 @@
       <router-view />
     </q-page-container>
 
+    <GlobalPatrolDriver v-if="auth.isAuthenticated"/>
     <RobotStatusDialog v-model="statusOpen"/>
   </q-layout>
 </template>
 
 <script setup>
-import { computed, onMounted, provide, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
+import GlobalPatrolDriver from 'components/map-pose/GlobalPatrolDriver.vue'
 import RobotStatusDialog from 'components/common/RobotStatusDialog.vue'
 import { useAuthStore } from 'stores/auth'
 import { useRobotRuntime } from 'stores/robot-runtime'
@@ -216,10 +218,6 @@ const auth = useAuthStore()
 const runtime = useRobotRuntime()
 const statusOpen = ref(false)
 const { localeMenu, setLocale } = useLocaleSwitch()
-
-/** 执行由 edge-agent + rosbridge 负责；控制台监控页只做展示 */
-const patrolDriverMode = ref('global')
-provide('patrolDriverMode', patrolDriverMode)
 
 const homeMenu = computed(() =>
   (auth.menus || []).find((m) => m.name === 'home' || m.path === '/')
