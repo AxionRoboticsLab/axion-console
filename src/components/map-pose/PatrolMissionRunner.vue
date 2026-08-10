@@ -24,7 +24,7 @@ const syncRobotToDefaultStart = inject('syncRobotToDefaultStart', null)
 const syncRobotToPose = inject('syncRobotToPose', null)
 const mapReady = inject('mapReady', ref(false))
 const loadedMapId = inject('loadedMapId', ref(null))
-/** global：执行由 GlobalPatrolDriver 负责，本组件只做地图 UI / 控制条 */
+/** global：执行由 edge-agent 负责，本组件只做地图 UI / 控制条 */
 const patrolDriverMode = inject('patrolDriverMode', ref('local'))
 const isUiOnly = computed(() => patrolDriverMode?.value === 'global')
 
