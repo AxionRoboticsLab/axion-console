@@ -165,7 +165,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.phase = 'idle'
       this.returning = false
       this.followOnEnter = false
-    }
+    },
 
     consumeFollowOnEnter () {
       if (!this.followOnEnter) return false
