@@ -190,6 +190,7 @@
     </q-page-container>
 
     <GlobalPatrolDriver v-if="auth.isAuthenticated"/>
+    <GlobalAlarmListener v-if="auth.isAuthenticated"/>
     <RobotStatusDialog v-model="statusOpen"/>
   </q-layout>
 </template>
@@ -200,6 +201,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import GlobalPatrolDriver from 'components/map-pose/GlobalPatrolDriver.vue'
+import GlobalAlarmListener from 'components/alarms/GlobalAlarmListener.vue'
 import RobotStatusDialog from 'components/common/RobotStatusDialog.vue'
 import { useAuthStore } from 'stores/auth'
 import { useRobotRuntime } from 'stores/robot-runtime'

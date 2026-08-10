@@ -22,6 +22,7 @@ function createRosClient () {
     robotPose: ref({}),
     navState: ref('idle'),
     robotStatus: ref(null),
+    lastAlarmEvent: ref(null),
     loadMapData: ref(function (data) {}),
     loadMapRaw: ref(function (data) {}),
     loadLaserScan: ref(function (data) {}),
@@ -48,7 +49,8 @@ function createRosClient () {
       topic === '/map_command' ||
       topic === '/map_state' ||
       topic === '/nav_state' ||
-      topic === '/robot_status'
+      topic === '/robot_status' ||
+      topic === '/alarm_event'
     ) {
       return stringType()
     }
@@ -169,6 +171,11 @@ function createRosClient () {
         const data = rosObject.msg?.data ?? rosObject.msg
         rosClient.robotStatus.value = data
         robotRuntime.applyStatus(data)
+        break
+      }
+      case '/alarm_event': {
+        const data = rosObject.msg?.data ?? rosObject.msg
+        rosClient.lastAlarmEvent.value = data
         break
       }
     }
