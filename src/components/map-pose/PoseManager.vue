@@ -13,11 +13,13 @@ import { isValidIdentityName, normalizeIdentityName } from 'src/utils/naming'
 import { Notify, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { usePatrolMission } from 'stores/patrol-mission'
 
 const $q = useQuasar()
 const { t } = useI18n()
 const pageMode = inject('pageMode')
 const robotPose = inject('robotPose')
+
 const mapManager = inject('mapManager')
 const loadedMapName = inject('loadedMapName', null)
 const loadedMapId = inject('loadedMapId', null)
@@ -143,7 +145,11 @@ onUnmounted(() => {
   if (mapManager?.onFrameLayout === syncActionsToFrame) {
     mapManager.onFrameLayout = null
   }
-  mapManager?.loadPoseList?.([])
+  // 巡检任务执行中不要清空地图标记（任务 runner 会画最优路线点）
+  const mission = usePatrolMission()
+  if (!mission.active && !mission.pending) {
+    mapManager?.loadPoseList?.([])
+  }
 })
 
 watch(() => loadedMapId?.value, () => {

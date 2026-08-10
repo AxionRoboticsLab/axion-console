@@ -446,21 +446,56 @@ export default function () {
     }
     mapRender.poseContainer.removeChildren()
 
-    mapRender.poseTexture = await Assets.load('pose.png')
+    try {
+      if (!mapRender.poseTexture) {
+        mapRender.poseTexture = await Assets.load('pose.png')
+      }
+    } catch (e) {
+      console.warn('[map] pose.png load failed, use circle markers', e)
+      mapRender.poseTexture = null
+    }
+
+    const quatFromYaw = (yaw) => ({
+      x: 0,
+      y: 0,
+      z: Math.sin(yaw / 2),
+      w: Math.cos(yaw / 2)
+    })
 
     ;(poseList || []).forEach(p => {
-      const pos = p.pose || p
-      if (!pos?.position || !pos?.orientation) return
+      let pos = p.pose
+      if (!pos?.position) {
+        const x = Number(p.x)
+        const y = Number(p.y)
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return
+        const yaw = Number(p.yaw) || 0
+        pos = {
+          position: { x, y, z: 0 },
+          orientation: quatFromYaw(yaw)
+        }
+      }
+      if (!pos?.orientation) {
+        pos = { ...pos, orientation: quatFromYaw(0) }
+      }
+
       const root = new Container()
-      const point = new Sprite(mapRender.poseTexture)
-      point.anchor.set(0.5)
-      point.alpha = 0.85
-      const scale = controlParam.arrowScale / mapRender.poseTexture.width
-      point.scale.set(scale)
-      point.tint = getCssVar('info')
-      // 与机器人箭头同一朝向约定（yaw=0 朝上）
-      point.rotation = -mapRender.quaternionToTheta(pos.orientation) * Math.PI / 180
-      root.addChild(point)
+      if (mapRender.poseTexture) {
+        const point = new Sprite(mapRender.poseTexture)
+        point.anchor.set(0.5)
+        point.alpha = 0.9
+        const scale = controlParam.arrowScale / mapRender.poseTexture.width
+        point.scale.set(scale)
+        point.tint = getCssVar('info')
+        point.rotation = -mapRender.quaternionToTheta(pos.orientation) * Math.PI / 180
+        root.addChild(point)
+      } else {
+        const g = new Graphics()
+        g.circle(0, 0, 0.18)
+        g.fill({ color: 0x0288D1, alpha: 0.9 })
+        g.circle(0, 0, 0.08)
+        g.fill({ color: 0xffffff, alpha: 1 })
+        root.addChild(g)
+      }
 
       const name = p.name || p.label || p.header?.frame_id
       if (name) {
@@ -475,9 +510,7 @@ export default function () {
       mapRender.poseContainer.addChild(root)
     })
 
-    if (mapRender.poseContainer.parent !== mapRender.world) {
-      mapRender.addToWorld(mapRender.poseContainer)
-    }
+    mapRender.addToWorld(mapRender.poseContainer)
   }
 
   mapRender.changePoseColor = (seq) => {
@@ -1005,11 +1038,11 @@ export default function () {
     if (!pts || pts.length < 2) return
     mapRender._patrolTourPts = pts.map((p) => ({ x: p.x, y: p.y }))
     const layer = new Graphics()
-    // 中等青绿：可见且不抢导航蓝线
-    mapRender.strokePoly(layer, pts, 0x26A69A, 0.1, 0.78)
+    // 青绿最优巡检环：略加粗，避免被导航蓝线盖住后“像没了”
+    mapRender.strokePoly(layer, pts, 0x00897B, 0.14, 0.9)
     for (let i = 1; i < pts.length; i++) {
-      layer.circle(pts[i].x, -pts[i].y, 0.09)
-      layer.fill({ color: 0x26A69A, alpha: 0.5 })
+      layer.circle(pts[i].x, -pts[i].y, 0.12)
+      layer.fill({ color: 0x00897B, alpha: 0.55 })
     }
     mapRender.addToWorld(layer)
     mapRender.patrolTour = layer

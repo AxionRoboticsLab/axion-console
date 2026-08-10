@@ -166,11 +166,31 @@ function drawTour (start, ordered) {
     poly.push({ x: charge.x, y: charge.y })
   }
   mapManager?.drawPatrolTour?.(poly)
-  mapManager?.loadPoseList?.(ordered.map((p) => ({
-    id: p.id,
-    name: p.name,
-    pose: p.pose
-  })))
+  const markers = (ordered || []).map((p) => {
+    const x = Number(p.x ?? p.pose?.position?.x)
+    const y = Number(p.y ?? p.pose?.position?.y)
+    const yaw = Number(p.yaw ?? 0)
+    const pose = p.pose?.position
+      ? p.pose
+      : {
+          position: { x: x || 0, y: y || 0, z: 0 },
+          orientation: {
+            x: 0,
+            y: 0,
+            z: Math.sin(yaw / 2),
+            w: Math.cos(yaw / 2)
+          }
+        }
+    return {
+      id: p.id,
+      name: p.name || String(p.id),
+      x,
+      y,
+      yaw,
+      pose
+    }
+  }).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+  void mapManager?.loadPoseList?.(markers)
   if (charge) {
     mapManager?.drawChargeMarker?.({
       ...charge,
@@ -244,6 +264,7 @@ function restoreMapAfterMission () {
   if (focusingUi) focusingUi.value = false
   mapManager?.clearPatrolTour?.()
   mapManager?.clearNavPlan?.()
+  mapManager?.loadPoseList?.([])
   mapManager?.restoreMapOverview?.()
 }
 
@@ -362,9 +383,11 @@ async function resumeActiveUi () {
   if (!mission.active || !mission.ordered.length) return
   enterAutoFollow()
   await ensureChargePoint()
-  const live = resolveStart() || { x: 0, y: 0 }
+  // 必须 await：否则 start 是 Promise，最优路线折线会画坏/看不见
+  const live = (await resolveStart()) || { x: 0, y: 0 }
   drawTour(live, mission.ordered)
   startedRunId = mission.runId
+  mission.driveLocal = true
 }
 
 async function pauseMission () {
@@ -389,6 +412,25 @@ async function stopMission () {
 }
 
 // 任务结果页取消等：会话结束后也恢复全图格栅
+watch(
+  () => [mission.active, mission.runId, mission.ordered?.length, mapReady?.value],
+  async () => {
+    if (!mission.active || !mission.ordered?.length) return
+    if (!mapReady?.value && !mapManager?.mapInfo) return
+    const needTour = !mapManager?.patrolTour || mapManager._patrolTourPts == null
+    const needPoses = !mapManager?.poseContainer?.children?.length
+    // 定时任务在其它页开跑后再进监控：补画最优巡检环与巡检点
+    if (needTour || needPoses) {
+      await ensureChargePoint()
+      const live = (await resolveStart()) || { x: 0, y: 0 }
+      drawTour(live, mission.ordered)
+      startedRunId = mission.runId
+      mission.driveLocal = true
+    }
+  },
+  { deep: true }
+)
+
 watch(
   () => mission.active,
   (active, was) => {
