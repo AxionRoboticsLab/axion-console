@@ -185,6 +185,8 @@ export default {
   patrol_replay_hint: '任务过程录包（rosbag）回放区；当前为演示时间轴，接入真实 bag/视频后可直接播放。',
   patrol_replay_demo_mode: '演示回放（按规划点位推进）',
   patrol_replay_now: '当前',
+  patrol_replay_mute: '静音',
+  patrol_replay_unmute: '取消静音',
   patrol_replay_play: '播放',
   patrol_replay_reset: '重播',
   patrol_task_claim: '接管执行',

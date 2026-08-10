@@ -185,6 +185,8 @@ export default {
   patrol_replay_hint: 'Rosbag / video playback for this run. Demo timeline until a real bag URL is attached.',
   patrol_replay_demo_mode: 'Demo playback (advance by waypoints)',
   patrol_replay_now: 'Now',
+  patrol_replay_mute: 'Mute',
+  patrol_replay_unmute: 'Unmute',
   patrol_replay_play: 'Play',
   patrol_replay_reset: 'Replay',
   patrol_task_claim: 'Take over',

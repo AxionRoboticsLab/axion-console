@@ -359,77 +359,85 @@
         <q-separator/>
         <q-card-section v-if="report" class="q-pa-md" style="max-height: 82vh; overflow: auto">
           <div class="row q-col-gutter-lg">
-            <div class="col-12 col-md-5 q-gutter-md">
-              <div class="text-subtitle2">{{ t('patrol_task_report_summary') }}</div>
-              <q-list dense bordered class="rounded-borders">
-                <q-item>
-                  <q-item-section>{{ t('patrol_task_name') }}</q-item-section>
-                  <q-item-section side>{{ report.summary?.name || '—' }}</q-item-section>
-                </q-item>
-                <q-item>
-                  <q-item-section>{{ t('patrol_task_exec_id') }}</q-item-section>
-                  <q-item-section side class="text-caption">{{ report.summary?.exec_id || '—' }}</q-item-section>
-                </q-item>
-                <q-item>
-                  <q-item-section>{{ t('patrol_task_map') }}</q-item-section>
-                  <q-item-section side>{{ report.summary?.map_name || '—' }}</q-item-section>
-                </q-item>
-                <q-item>
-                  <q-item-section>{{ t('patrol_task_status') }}</q-item-section>
-                  <q-item-section side>
-                    <q-badge :color="statusColor(report.summary?.status)">{{ statusLabel(report.summary?.status) }}</q-badge>
-                  </q-item-section>
-                </q-item>
-                <q-item>
-                  <q-item-section>{{ t('patrol_task_result') }}</q-item-section>
-                  <q-item-section side>
-                    <template v-if="report.summary?.result">
-                      <q-badge :color="report.summary.result === 'success' ? 'positive' : 'negative'">
-                        {{ resultLabel(report.summary.result) }}
-                      </q-badge>
-                    </template>
-                    <span v-else>—</span>
-                  </q-item-section>
-                </q-item>
-                <q-item>
-                  <q-item-section>{{ t('patrol_task_exec_time') }}</q-item-section>
-                  <q-item-section side class="text-right text-caption">
-                    <div>{{ report.summary?.startedAt || '—' }}</div>
-                    <div>~ {{ report.summary?.endedAt || '—' }}</div>
-                  </q-item-section>
-                </q-item>
-                <q-item>
-                  <q-item-section>{{ t('patrol_task_report_progress') }}</q-item-section>
-                  <q-item-section side>{{ report.summary?.progress || '—' }}</q-item-section>
-                </q-item>
-              </q-list>
-
-              <div class="text-subtitle2">{{ t('patrol_task_route') }}</div>
-              <div class="text-body2">
-                {{ (report.route || []).join(' → ') || '—' }}
-                <span v-if="report.charge"> → {{ t('charge_point') }}</span>
+            <div class="col-12 col-md-5 column q-gutter-md">
+              <div>
+                <div class="patrol-report__section-title">{{ t('patrol_task_report_summary') }}</div>
+                <div class="patrol-report__summary">
+                  <div class="patrol-report__kv">
+                    <div class="patrol-report__k">{{ t('patrol_task_name') }}</div>
+                    <div class="patrol-report__v">{{ report.summary?.name || '—' }}</div>
+                  </div>
+                  <div class="patrol-report__kv">
+                    <div class="patrol-report__k">{{ t('patrol_task_exec_id') }}</div>
+                    <div class="patrol-report__v patrol-report__v--mono">{{ report.summary?.exec_id || '—' }}</div>
+                  </div>
+                  <div class="patrol-report__kv">
+                    <div class="patrol-report__k">{{ t('patrol_task_map') }}</div>
+                    <div class="patrol-report__v">{{ report.summary?.map_name || '—' }}</div>
+                  </div>
+                  <div class="patrol-report__kv">
+                    <div class="patrol-report__k">{{ t('patrol_task_status') }}</div>
+                    <div class="patrol-report__v">
+                      <q-badge :color="statusColor(report.summary?.status)">{{ statusLabel(report.summary?.status) }}</q-badge>
+                    </div>
+                  </div>
+                  <div class="patrol-report__kv">
+                    <div class="patrol-report__k">{{ t('patrol_task_result') }}</div>
+                    <div class="patrol-report__v">
+                      <template v-if="report.summary?.result">
+                        <q-badge :color="report.summary.result === 'success' ? 'positive' : 'negative'">
+                          {{ resultLabel(report.summary.result) }}
+                        </q-badge>
+                      </template>
+                      <span v-else>—</span>
+                    </div>
+                  </div>
+                  <div class="patrol-report__kv">
+                    <div class="patrol-report__k">{{ t('patrol_task_report_progress') }}</div>
+                    <div class="patrol-report__v">{{ report.summary?.progress || '—' }}</div>
+                  </div>
+                  <div class="patrol-report__kv patrol-report__kv--full">
+                    <div class="patrol-report__k">{{ t('patrol_task_exec_time') }}</div>
+                    <div class="patrol-report__v">
+                      {{ report.summary?.startedAt || '—' }}
+                      <span class="text-grey-6"> ~ </span>
+                      {{ report.summary?.endedAt || '—' }}
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div class="text-subtitle2">{{ t('patrol_task_report_timeline') }}</div>
-              <q-timeline color="primary" dense>
-                <q-timeline-entry
-                  v-for="(ev, idx) in (report.timeline || [])"
-                  :key="idx"
-                  :title="ev.label"
-                  :subtitle="ev.t || ''"
-                  :color="timelineColor(ev.event)"
-                  :icon="timelineIcon(ev.event)"
-                />
-              </q-timeline>
+              <div>
+                <div class="patrol-report__section-title">{{ t('patrol_task_route') }}</div>
+                <div class="patrol-report__route">
+                  {{ (report.route || []).join(' → ') || '—' }}
+                  <span v-if="report.charge"> → {{ t('charge_point') }}</span>
+                </div>
+              </div>
+
+              <div>
+                <div class="patrol-report__section-title">{{ t('patrol_task_report_timeline') }}</div>
+                <q-timeline color="primary" dense class="patrol-report__timeline">
+                  <q-timeline-entry
+                    v-for="(ev, idx) in (report.timeline || [])"
+                    :key="idx"
+                    :title="ev.label"
+                    :subtitle="ev.t || ''"
+                    :color="timelineColor(ev.event)"
+                    :icon="timelineIcon(ev.event)"
+                  />
+                </q-timeline>
+              </div>
             </div>
 
-            <div class="col-12 col-md-7" v-if="showPlayback">
-              <PatrolReplayPanel :report="report"/>
-            </div>
-            <div v-else class="col-12 col-md-7 flex flex-center text-grey-6">
-              <div class="text-center q-pa-lg">
-                <q-icon name="videocam_off" size="40px"/>
-                <div class="q-mt-sm">{{ t('patrol_replay_disabled') }}</div>
+            <div class="col-12 col-md-7">
+              <PatrolReplayPanel
+                v-if="showPlayback"
+                :report="report"
+              />
+              <div v-else class="patrol-replay-disabled column flex-center">
+                <q-icon name="videocam_off" size="40px" color="grey-6"/>
+                <div class="q-mt-sm text-grey-7">{{ t('patrol_replay_disabled') }}</div>
               </div>
             </div>
           </div>
@@ -443,6 +451,69 @@
 .patrol-report-card {
   width: min(72rem, 96vw);
   max-width: 96vw;
+}
+
+.patrol-report__section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #263238;
+  margin-bottom: 0.55rem;
+}
+
+.patrol-report__summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.patrol-report__kv--full {
+  grid-column: 1 / -1;
+}
+
+.patrol-report__k {
+  font-size: 0.75rem;
+  color: #78909c;
+  margin-bottom: 0.15rem;
+}
+
+.patrol-report__v {
+  font-size: 0.9rem;
+  color: #37474f;
+  word-break: break-all;
+}
+
+.patrol-report__v--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.patrol-report__route {
+  font-size: 0.9rem;
+  color: #455a64;
+  line-height: 1.5;
+}
+
+.patrol-report__timeline :deep(.q-timeline__title) {
+  font-size: 0.82rem !important;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.patrol-report__timeline :deep(.q-timeline__subtitle) {
+  font-size: 0.72rem !important;
+  opacity: 0.75;
+}
+
+.patrol-replay-disabled {
+  min-height: 280px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  background: #fafafa;
+  padding: 1.5rem;
 }
 </style>
 
