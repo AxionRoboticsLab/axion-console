@@ -181,6 +181,7 @@ export default {
   patrol_task_auto_record_hint: '默认开启；关闭后详情不显示回放区域',
   patrol_replay_disabled: '本次未开启自动录包，无回放',
   patrol_task_started_background: '「{name}」已入队/开始（由边缘端执行，无需登录控制台）',
+  patrol_task_execute_jump: '正在跳转实时监控并跟随「{name}」',
   patrol_replay_title: '录包回放',
   patrol_replay_hint: '任务过程录包（rosbag）回放区；当前为演示时间轴，接入真实 bag/视频后可直接播放。',
   patrol_replay_demo_mode: '演示回放（按规划点位推进）',
@@ -421,7 +422,6 @@ export default {
   charge_point_set: '已保存充电点（每图仅一个；巡检结束自动返航）',
   charge_point_change_title: '更改充电点',
   charge_point_change_confirm: '地图上已有充电点，是否将充电点更改为当前位置？',
-  patrol_task_execute_jump: '正在跳转导航并执行「{name}」',
 
   joystick_params: '手柄遥控参数',
   joystick_linear: '线性移动速度',

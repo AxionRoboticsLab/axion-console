@@ -276,6 +276,16 @@ onMounted(async () => {
     })
     syncChargeStateFromPose(t.x, t.y)
   }, 50)
+
+  if (isMonitorWorkspace.value && patrolMission.consumeFollowOnEnter()) {
+    navMode.value = 'auto'
+    void (async () => {
+      for (let i = 0; i < 60 && !mapReady.value; i++) {
+        await new Promise((r) => setTimeout(r, 50))
+      }
+      setFocusing(true)
+    })()
+  }
 })
 
 onUnmounted(() => {

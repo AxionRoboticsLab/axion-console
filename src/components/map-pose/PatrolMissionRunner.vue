@@ -306,8 +306,20 @@ function advance () {
 
 async function tryStartPending () {
   if (isUiOnly.value) {
-    // 全局驱动已开跑：仅补画路线
-    if (mission.active && mission.ordered.length) {
+    // 边缘端执行：监控页只展示路线与跟随，不发 goal
+    if (mission.pending && mission.points.length && startedRunId !== mission.runId) {
+      enterAutoFollow()
+      await ensureChargePoint()
+      const start = await resolveStart()
+      let ordered = mission.ordered
+      if (!ordered.length) {
+        ordered = planPatrolOrder(start || { x: 0, y: 0 }, mission.points)
+        mission.setOrdered(ordered)
+      }
+      if (start) drawTour(start, ordered)
+      mission.beginRunning()
+      startedRunId = mission.runId
+    } else if (mission.active && mission.ordered.length) {
       const start = await resolveStart()
       if (start) drawTour(start, mission.ordered)
     }

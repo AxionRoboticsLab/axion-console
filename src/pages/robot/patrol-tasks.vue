@@ -1111,12 +1111,17 @@ async function executeTask (row) {
     })
 
     if (run.status === 'running' || run.auto_started) {
+      // 页面手动执行：跳转实时监控并跟随；定时自动任务由边缘端跑，不跳转
+      try {
+        mission.requestFromRun(run, { follow: true })
+      } catch (e) {
+        console.warn('[patrol] requestFromRun', e)
+      }
       Notify.create({
         type: 'positive',
-        message: t('patrol_task_started_background', { name: row.name })
+        message: t('patrol_task_execute_jump', { name: row.name })
       })
-      tab.value = 'results'
-      await reloadRuns()
+      await router.push({ name: 'robot_monitor' })
     } else {
       Notify.create({ type: 'info', message: t('patrol_task_queued', { name: row.name }) })
       tab.value = 'results'

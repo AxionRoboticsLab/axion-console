@@ -181,6 +181,7 @@ export default {
   patrol_task_auto_record_hint: 'On by default; when off, details hide playback',
   patrol_replay_disabled: 'Auto-record was off for this run — no playback',
   patrol_task_started_background: '“{name}” queued/started (edge executor, no console login needed)',
+  patrol_task_execute_jump: 'Opening live monitor and following “{name}”',
   patrol_replay_title: 'Bag playback',
   patrol_replay_hint: 'Rosbag / video playback for this run. Demo timeline until a real bag URL is attached.',
   patrol_replay_demo_mode: 'Demo playback (advance by waypoints)',
@@ -421,7 +422,6 @@ export default {
   charge_point_set: 'Charge dock saved (one per map; auto-return after patrol)',
   charge_point_change_title: 'Move charge dock',
   charge_point_change_confirm: 'A charge dock already exists on this map. Move it to the current position?',
-  patrol_task_execute_jump: 'Opening navigation to run “{name}”',
 
   joystick_params: 'Joystick Params',
   joystick_linear: 'Linear Speed',

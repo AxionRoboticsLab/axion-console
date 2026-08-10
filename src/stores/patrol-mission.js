@@ -27,7 +27,9 @@ export const usePatrolMission = defineStore('patrol-mission', {
     startedAt: null,
     /** planning | running | returning | paused | done | cancelled */
     phase: 'idle',
-    returning: false
+    returning: false,
+    /** 手动执行后进入监控页时自动开启跟随 */
+    followOnEnter: false
   }),
 
   getters: {
@@ -70,6 +72,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.returning = false
       this.startedAt = run.startedAt || new Date().toISOString().slice(0, 19).replace('T', ' ')
       this.phase = 'planning'
+      if (opts.follow) this.followOnEnter = true
     },
 
     /** @deprecated 兼容旧本地执行 */
@@ -161,6 +164,13 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.startedAt = null
       this.phase = 'idle'
       this.returning = false
+      this.followOnEnter = false
+    }
+
+    consumeFollowOnEnter () {
+      if (!this.followOnEnter) return false
+      this.followOnEnter = false
+      return true
     }
   }
 })
