@@ -19,7 +19,13 @@
           @request="onTaskRequest"
         >
           <template #top-right>
-            <q-btn color="primary" unelevated icon="add" :label="t('patrol_task_create')" @click="openCreate"/>
+            <q-btn
+              flat color="secondary" icon="schedule"
+              :label="t('patrol_task_scheduler_tick')"
+              :loading="tickLoading"
+              @click="runSchedulerTick"
+            />
+            <q-btn color="primary" unelevated class="q-ml-sm" icon="add" :label="t('patrol_task_create')" @click="openCreate"/>
             <q-btn flat class="q-ml-sm" icon="refresh" :label="t('patrol_task_reset')" @click="reloadTasks"/>
           </template>
           <template #body-cell-mapName="props">
@@ -117,6 +123,19 @@
           :pagination="resultPagination"
           @request="onResultRequest"
         >
+          <template #body-cell-name="props">
+            <q-td :props="props">
+              <div>{{ props.row.name }}</div>
+              <q-badge
+                v-if="props.row.trigger === 'schedule'"
+                color="deep-purple-4"
+                dense
+                class="q-mt-xs"
+              >
+                {{ t('patrol_task_trigger_schedule') }}
+              </q-badge>
+            </q-td>
+          </template>
           <template #body-cell-status="props">
             <q-td :props="props">
               <q-badge :color="statusColor(props.row.status)">{{ statusLabel(props.row.status) }}</q-badge>
@@ -363,6 +382,7 @@ import {
   listPatrolRuns,
   listPatrolTasks,
   patrolRunAction,
+  tickPatrolScheduler,
   updatePatrolTask
 } from 'src/api/patrol-tasks'
 import { usePatrolMission } from 'stores/patrol-mission'
@@ -614,6 +634,8 @@ async function reloadRuns () {
       ...r,
       execId: r.exec_id || r.execId || '',
       name: r.name || r.task_name || '',
+      trigger: r.trigger || 'unknown',
+      slot: r.slot || null,
       report: r.report || null
     }))
     resultPagination.value.rowsNumber = runs.value.length
@@ -621,6 +643,28 @@ async function reloadRuns () {
     Notify.create({ type: 'negative', message: e.message || t('patrol_task_load_failed') })
   } finally {
     runsLoading.value = false
+  }
+}
+
+const tickLoading = ref(false)
+
+async function runSchedulerTick () {
+  tickLoading.value = true
+  try {
+    const r = await tickPatrolScheduler()
+    Notify.create({
+      type: 'positive',
+      message: t('patrol_task_scheduler_tick_ok', {
+        enqueued: r?.enqueued ?? 0,
+        relayed: r?.relayed ?? 0
+      })
+    })
+    tab.value = 'results'
+    await reloadRuns()
+  } catch (e) {
+    Notify.create({ type: 'negative', message: e.message || t('patrol_task_load_failed') })
+  } finally {
+    tickLoading.value = false
   }
 }
 

@@ -72,3 +72,8 @@ export function patrolRunAction (runId, action, extra = {}) {
     ...extra
   }))
 }
+
+/** 手动触发一次定时调度扫描（演示 / 联调） */
+export function tickPatrolScheduler () {
+  return unwrap(api.post('/patrol_tasks/scheduler/tick'))
+}
