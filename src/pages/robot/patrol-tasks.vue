@@ -358,65 +358,81 @@
         </q-card-section>
         <q-separator/>
         <q-card-section v-if="report" class="q-pa-md" style="max-height: 82vh; overflow: auto">
-          <div class="row q-col-gutter-lg">
-            <div class="col-12 col-md-5 column q-gutter-md">
-              <div>
-                <div class="patrol-report__section-title">{{ t('patrol_task_report_summary') }}</div>
-                <div class="patrol-report__summary">
-                  <div class="patrol-report__kv">
-                    <div class="patrol-report__k">{{ t('patrol_task_name') }}</div>
-                    <div class="patrol-report__v">{{ report.summary?.name || '—' }}</div>
+          <div class="column q-gutter-md">
+            <div>
+              <div class="patrol-report__section-title">{{ t('patrol_task_report_summary') }}</div>
+              <div class="patrol-report__summary">
+                <div class="patrol-report__kv">
+                  <div class="patrol-report__k">{{ t('patrol_task_name') }}</div>
+                  <div class="patrol-report__v">{{ report.summary?.name || '—' }}</div>
+                </div>
+                <div class="patrol-report__kv">
+                  <div class="patrol-report__k">{{ t('patrol_task_exec_id') }}</div>
+                  <div class="patrol-report__v patrol-report__v--mono">{{ report.summary?.exec_id || '—' }}</div>
+                </div>
+                <div class="patrol-report__kv">
+                  <div class="patrol-report__k">{{ t('patrol_task_map') }}</div>
+                  <div class="patrol-report__v">{{ report.summary?.map_name || '—' }}</div>
+                </div>
+                <div class="patrol-report__kv">
+                  <div class="patrol-report__k">{{ t('patrol_task_status') }}</div>
+                  <div class="patrol-report__v">
+                    <q-badge :color="statusColor(report.summary?.status)">{{ statusLabel(report.summary?.status) }}</q-badge>
                   </div>
-                  <div class="patrol-report__kv">
-                    <div class="patrol-report__k">{{ t('patrol_task_exec_id') }}</div>
-                    <div class="patrol-report__v patrol-report__v--mono">{{ report.summary?.exec_id || '—' }}</div>
+                </div>
+                <div class="patrol-report__kv">
+                  <div class="patrol-report__k">{{ t('patrol_task_result') }}</div>
+                  <div class="patrol-report__v">
+                    <template v-if="report.summary?.result">
+                      <q-badge :color="report.summary.result === 'success' ? 'positive' : 'negative'">
+                        {{ resultLabel(report.summary.result) }}
+                      </q-badge>
+                    </template>
+                    <span v-else>—</span>
                   </div>
-                  <div class="patrol-report__kv">
-                    <div class="patrol-report__k">{{ t('patrol_task_map') }}</div>
-                    <div class="patrol-report__v">{{ report.summary?.map_name || '—' }}</div>
-                  </div>
-                  <div class="patrol-report__kv">
-                    <div class="patrol-report__k">{{ t('patrol_task_status') }}</div>
-                    <div class="patrol-report__v">
-                      <q-badge :color="statusColor(report.summary?.status)">{{ statusLabel(report.summary?.status) }}</q-badge>
-                    </div>
-                  </div>
-                  <div class="patrol-report__kv">
-                    <div class="patrol-report__k">{{ t('patrol_task_result') }}</div>
-                    <div class="patrol-report__v">
-                      <template v-if="report.summary?.result">
-                        <q-badge :color="report.summary.result === 'success' ? 'positive' : 'negative'">
-                          {{ resultLabel(report.summary.result) }}
-                        </q-badge>
-                      </template>
-                      <span v-else>—</span>
-                    </div>
-                  </div>
-                  <div class="patrol-report__kv">
-                    <div class="patrol-report__k">{{ t('patrol_task_report_progress') }}</div>
-                    <div class="patrol-report__v">{{ report.summary?.progress || '—' }}</div>
-                  </div>
-                  <div class="patrol-report__kv patrol-report__kv--full">
-                    <div class="patrol-report__k">{{ t('patrol_task_exec_time') }}</div>
-                    <div class="patrol-report__v">
-                      {{ report.summary?.startedAt || '—' }}
-                      <span class="text-grey-6"> ~ </span>
-                      {{ report.summary?.endedAt || '—' }}
-                    </div>
+                </div>
+                <div class="patrol-report__kv">
+                  <div class="patrol-report__k">{{ t('patrol_task_report_progress') }}</div>
+                  <div class="patrol-report__v">{{ report.summary?.progress || '—' }}</div>
+                </div>
+                <div class="patrol-report__kv patrol-report__kv--full">
+                  <div class="patrol-report__k">{{ t('patrol_task_exec_time') }}</div>
+                  <div class="patrol-report__v">
+                    {{ report.summary?.startedAt || '—' }}
+                    <span class="text-grey-6"> ~ </span>
+                    {{ report.summary?.endedAt || '—' }}
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div>
-                <div class="patrol-report__section-title">{{ t('patrol_task_route') }}</div>
+            <div>
+              <div class="patrol-report__section-title">{{ t('patrol_task_route') }}</div>
+              <div class="patrol-report__panel">
                 <div class="patrol-report__route">
                   {{ (report.route || []).join(' → ') || '—' }}
                   <span v-if="report.charge"> → {{ t('charge_point') }}</span>
                 </div>
               </div>
+            </div>
 
-              <div>
-                <div class="patrol-report__section-title">{{ t('patrol_task_report_timeline') }}</div>
+            <div>
+              <PatrolReplayPanel
+                v-if="showPlayback"
+                :report="report"
+              />
+              <template v-else>
+                <div class="patrol-report__section-title">{{ t('patrol_replay_title') }}</div>
+                <div class="patrol-replay-disabled column flex-center">
+                  <q-icon name="videocam_off" size="40px" color="grey-6"/>
+                  <div class="q-mt-sm text-grey-7">{{ t('patrol_replay_disabled') }}</div>
+                </div>
+              </template>
+            </div>
+
+            <div>
+              <div class="patrol-report__section-title">{{ t('patrol_task_report_timeline') }}</div>
+              <div class="patrol-report__panel">
                 <q-timeline color="primary" dense class="patrol-report__timeline">
                   <q-timeline-entry
                     v-for="(ev, idx) in (report.timeline || [])"
@@ -429,17 +445,6 @@
                 </q-timeline>
               </div>
             </div>
-
-            <div class="col-12 col-md-7">
-              <PatrolReplayPanel
-                v-if="showPlayback"
-                :report="report"
-              />
-              <div v-else class="patrol-replay-disabled column flex-center">
-                <q-icon name="videocam_off" size="40px" color="grey-6"/>
-                <div class="q-mt-sm text-grey-7">{{ t('patrol_replay_disabled') }}</div>
-              </div>
-            </div>
           </div>
         </q-card-section>
       </q-card>
@@ -449,7 +454,7 @@
 
 <style scoped>
 .patrol-report-card {
-  width: min(72rem, 96vw);
+  width: min(56rem, 96vw);
   max-width: 96vw;
 }
 
@@ -460,14 +465,18 @@
   margin-bottom: 0.55rem;
 }
 
-.patrol-report__summary {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.65rem 1rem;
+.patrol-report__summary,
+.patrol-report__panel {
   padding: 0.85rem 1rem;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   background: #fafafa;
+}
+
+.patrol-report__summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem 1.25rem;
 }
 
 .patrol-report__kv--full {
@@ -497,6 +506,10 @@
   line-height: 1.5;
 }
 
+.patrol-report__timeline {
+  margin: 0;
+}
+
 .patrol-report__timeline :deep(.q-timeline__title) {
   font-size: 0.82rem !important;
   font-weight: 500;
@@ -509,9 +522,9 @@
 }
 
 .patrol-replay-disabled {
-  min-height: 280px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 10px;
+  min-height: 220px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
   background: #fafafa;
   padding: 1.5rem;
 }
