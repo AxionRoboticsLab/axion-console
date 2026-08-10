@@ -13,6 +13,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
     taskName: '',
     taskType: 'once',
     runId: null,
+    mapId: null,
     /** 任务原始点位（未排序） */
     points: [],
     /** 规划后顺序（后端已算好时可直接用） */
@@ -59,6 +60,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.taskName = run.name || run.task_name || ''
       this.taskType = run.type || run.task_type || 'once'
       this.runId = run.id
+      this.mapId = run.map_id ?? run.mapId ?? null
       this.points = ordered
       this.ordered = ordered
       this.useServerOrder = true
@@ -149,6 +151,7 @@ export const usePatrolMission = defineStore('patrol-mission', {
       this.taskName = ''
       this.taskType = 'once'
       this.runId = null
+      this.mapId = null
       this.points = []
       this.ordered = []
       this.useServerOrder = false

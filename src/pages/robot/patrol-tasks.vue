@@ -333,6 +333,14 @@
             :label="t('patrol_task_points')"
             :hint="formMapHint"
           />
+          <q-toggle
+            v-model="form.autoRecordBag"
+            color="teal"
+            :label="t('patrol_task_auto_record')"
+          />
+          <div class="text-caption text-grey-7" style="margin-top: -0.5rem">
+            {{ t('patrol_task_auto_record_hint') }}
+          </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat :label="t('cancel')" v-close-popup/>
@@ -343,79 +351,100 @@
 
     <!-- 执行报告 -->
     <q-dialog v-model="reportOpen">
-      <q-card style="min-width: min(36rem, 94vw); max-width: 40rem">
+      <q-card class="patrol-report-card">
         <q-card-section class="row items-center no-wrap">
           <div class="text-h6 col">{{ t('patrol_task_report_title') }}</div>
           <q-btn flat round dense icon="close" v-close-popup/>
         </q-card-section>
         <q-separator/>
-        <q-card-section v-if="report" class="q-gutter-md" style="max-height: 70vh; overflow: auto">
-          <div class="text-subtitle2">{{ t('patrol_task_report_summary') }}</div>
-          <q-list dense bordered class="rounded-borders">
-            <q-item>
-              <q-item-section>{{ t('patrol_task_name') }}</q-item-section>
-              <q-item-section side>{{ report.summary?.name || '—' }}</q-item-section>
-            </q-item>
-            <q-item>
-              <q-item-section>{{ t('patrol_task_exec_id') }}</q-item-section>
-              <q-item-section side class="text-caption">{{ report.summary?.exec_id || '—' }}</q-item-section>
-            </q-item>
-            <q-item>
-              <q-item-section>{{ t('patrol_task_map') }}</q-item-section>
-              <q-item-section side>{{ report.summary?.map_name || '—' }}</q-item-section>
-            </q-item>
-            <q-item>
-              <q-item-section>{{ t('patrol_task_status') }}</q-item-section>
-              <q-item-section side>
-                <q-badge :color="statusColor(report.summary?.status)">{{ statusLabel(report.summary?.status) }}</q-badge>
-              </q-item-section>
-            </q-item>
-            <q-item>
-              <q-item-section>{{ t('patrol_task_result') }}</q-item-section>
-              <q-item-section side>
-                <template v-if="report.summary?.result">
-                  <q-badge :color="report.summary.result === 'success' ? 'positive' : 'negative'">
-                    {{ resultLabel(report.summary.result) }}
-                  </q-badge>
-                </template>
-                <span v-else>—</span>
-              </q-item-section>
-            </q-item>
-            <q-item>
-              <q-item-section>{{ t('patrol_task_exec_time') }}</q-item-section>
-              <q-item-section side class="text-right text-caption">
-                <div>{{ report.summary?.startedAt || '—' }}</div>
-                <div>~ {{ report.summary?.endedAt || '—' }}</div>
-              </q-item-section>
-            </q-item>
-            <q-item>
-              <q-item-section>{{ t('patrol_task_report_progress') }}</q-item-section>
-              <q-item-section side>{{ report.summary?.progress || '—' }}</q-item-section>
-            </q-item>
-          </q-list>
+        <q-card-section v-if="report" class="q-pa-md" style="max-height: 82vh; overflow: auto">
+          <div class="row q-col-gutter-lg">
+            <div class="col-12 col-md-5 q-gutter-md">
+              <div class="text-subtitle2">{{ t('patrol_task_report_summary') }}</div>
+              <q-list dense bordered class="rounded-borders">
+                <q-item>
+                  <q-item-section>{{ t('patrol_task_name') }}</q-item-section>
+                  <q-item-section side>{{ report.summary?.name || '—' }}</q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section>{{ t('patrol_task_exec_id') }}</q-item-section>
+                  <q-item-section side class="text-caption">{{ report.summary?.exec_id || '—' }}</q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section>{{ t('patrol_task_map') }}</q-item-section>
+                  <q-item-section side>{{ report.summary?.map_name || '—' }}</q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section>{{ t('patrol_task_status') }}</q-item-section>
+                  <q-item-section side>
+                    <q-badge :color="statusColor(report.summary?.status)">{{ statusLabel(report.summary?.status) }}</q-badge>
+                  </q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section>{{ t('patrol_task_result') }}</q-item-section>
+                  <q-item-section side>
+                    <template v-if="report.summary?.result">
+                      <q-badge :color="report.summary.result === 'success' ? 'positive' : 'negative'">
+                        {{ resultLabel(report.summary.result) }}
+                      </q-badge>
+                    </template>
+                    <span v-else>—</span>
+                  </q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section>{{ t('patrol_task_exec_time') }}</q-item-section>
+                  <q-item-section side class="text-right text-caption">
+                    <div>{{ report.summary?.startedAt || '—' }}</div>
+                    <div>~ {{ report.summary?.endedAt || '—' }}</div>
+                  </q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section>{{ t('patrol_task_report_progress') }}</q-item-section>
+                  <q-item-section side>{{ report.summary?.progress || '—' }}</q-item-section>
+                </q-item>
+              </q-list>
 
-          <div class="text-subtitle2">{{ t('patrol_task_route') }}</div>
-          <div class="text-body2">
-            {{ (report.route || []).join(' → ') || '—' }}
-            <span v-if="report.charge"> → {{ t('charge_point') }}</span>
+              <div class="text-subtitle2">{{ t('patrol_task_route') }}</div>
+              <div class="text-body2">
+                {{ (report.route || []).join(' → ') || '—' }}
+                <span v-if="report.charge"> → {{ t('charge_point') }}</span>
+              </div>
+
+              <div class="text-subtitle2">{{ t('patrol_task_report_timeline') }}</div>
+              <q-timeline color="primary" dense>
+                <q-timeline-entry
+                  v-for="(ev, idx) in (report.timeline || [])"
+                  :key="idx"
+                  :title="ev.label"
+                  :subtitle="ev.t || ''"
+                  :color="timelineColor(ev.event)"
+                  :icon="timelineIcon(ev.event)"
+                />
+              </q-timeline>
+            </div>
+
+            <div class="col-12 col-md-7" v-if="showPlayback">
+              <PatrolReplayPanel :report="report"/>
+            </div>
+            <div v-else class="col-12 col-md-7 flex flex-center text-grey-6">
+              <div class="text-center q-pa-lg">
+                <q-icon name="videocam_off" size="40px"/>
+                <div class="q-mt-sm">{{ t('patrol_replay_disabled') }}</div>
+              </div>
+            </div>
           </div>
-
-          <div class="text-subtitle2">{{ t('patrol_task_report_timeline') }}</div>
-          <q-timeline color="primary" dense>
-            <q-timeline-entry
-              v-for="(ev, idx) in (report.timeline || [])"
-              :key="idx"
-              :title="ev.label"
-              :subtitle="ev.t || ''"
-              :color="timelineColor(ev.event)"
-              :icon="timelineIcon(ev.event)"
-            />
-          </q-timeline>
         </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
 </template>
+
+<style scoped>
+.patrol-report-card {
+  width: min(72rem, 96vw);
+  max-width: 96vw;
+}
+</style>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
@@ -423,6 +452,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Notify, useQuasar } from 'quasar'
 import AppDataTable from 'components/common/AppDataTable.vue'
+import PatrolReplayPanel from 'components/map-pose/PatrolReplayPanel.vue'
 import { getChargePoint, listMaps, listPatrolPoints } from 'src/api/maps'
 import {
   createPatrolTask,
@@ -528,7 +558,8 @@ function normalizeTask (row) {
     loopCount: cfg.loop_count ?? 0,
     loopIntervalSec: cfg.loop_interval_sec ?? 0,
     scheduleTime: cfg.schedule_time || '',
-    scheduleOnceAt: cfg.schedule_once_at || ''
+    scheduleOnceAt: cfg.schedule_once_at || '',
+    autoRecordBag: cfg.auto_record_bag !== false
   }
 }
 
@@ -820,24 +851,28 @@ function emptyForm () {
     loopCount: 0,
     loopIntervalSec: 0,
     scheduleTime: '08:00',
-    scheduleOnceAt: ''
+    scheduleOnceAt: '',
+    autoRecordBag: true
   }
 }
 
 function buildConfig (f) {
+  const base = { auto_record_bag: f.autoRecordBag !== false }
   if (f.type === 'loop') {
     return {
+      ...base,
       loop_count: Number(f.loopCount) || 0,
       loop_interval_sec: Number(f.loopIntervalSec) || 0
     }
   }
   if (f.type === 'schedule') {
     return {
+      ...base,
       schedule_time: (f.scheduleTime || '').trim(),
       schedule_once_at: (f.scheduleOnceAt || '').trim() || null
     }
   }
-  return {}
+  return base
 }
 
 async function openCreate () {
@@ -862,7 +897,8 @@ async function openEdit (row) {
     loopCount: row.loopCount ?? 0,
     loopIntervalSec: row.loopIntervalSec ?? 0,
     scheduleTime: row.scheduleTime || '08:00',
-    scheduleOnceAt: row.scheduleOnceAt || ''
+    scheduleOnceAt: row.scheduleOnceAt || '',
+    autoRecordBag: row.autoRecordBag !== false
   }
   await loadPointsForMap(form.value.mapId)
   formOpen.value = true
@@ -961,9 +997,12 @@ async function executeTask (row) {
     })
 
     if (run.status === 'running' || run.auto_started) {
-      mission.requestFromRun(run)
-      Notify.create({ type: 'positive', message: t('patrol_task_execute_jump', { name: row.name }) })
-      await router.push({ name: 'robot_monitor' })
+      Notify.create({
+        type: 'positive',
+        message: t('patrol_task_started_background', { name: row.name })
+      })
+      tab.value = 'results'
+      await reloadRuns()
     } else {
       Notify.create({ type: 'info', message: t('patrol_task_queued', { name: row.name }) })
       tab.value = 'results'
@@ -1023,12 +1062,14 @@ async function cancelRun (row) {
 
 const reportOpen = ref(false)
 const report = ref(null)
+const showPlayback = computed(() => Boolean(report.value?.playback?.available))
 
 async function openReport (row) {
   try {
     const detail = row.report ? row : await getPatrolRun(row.id)
     report.value = detail.report || detail
     if (!report.value?.summary) {
+      const meta = detail.meta || {}
       report.value = {
         summary: {
           name: detail.name,
@@ -1043,7 +1084,13 @@ async function openReport (row) {
         },
         route: (detail.ordered || []).map((p) => p.name || p.id),
         charge: detail.charge,
-        timeline: detail.report?.timeline || []
+        timeline: detail.report?.timeline || [],
+        playback: {
+          kind: 'rosbag',
+          available: Boolean(meta.auto_record_bag) && ['done', 'cancelled'].includes(detail.status),
+          url: null,
+          auto_record_bag: Boolean(meta.auto_record_bag)
+        }
       }
     }
     reportOpen.value = true

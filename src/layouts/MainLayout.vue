@@ -194,7 +194,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, provide, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
@@ -216,6 +216,10 @@ const auth = useAuthStore()
 const runtime = useRobotRuntime()
 const statusOpen = ref(false)
 const { localeMenu, setLocale } = useLocaleSwitch()
+
+/** 执行由 edge-agent + rosbridge 负责；控制台监控页只做展示 */
+const patrolDriverMode = ref('global')
+provide('patrolDriverMode', patrolDriverMode)
 
 const homeMenu = computed(() =>
   (auth.menus || []).find((m) => m.name === 'home' || m.path === '/')

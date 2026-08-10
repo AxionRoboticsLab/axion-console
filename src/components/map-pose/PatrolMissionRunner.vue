@@ -4,7 +4,7 @@
  */
 import { Notify } from 'quasar'
 import { useI18n } from 'vue-i18n'
-import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getChargePoint } from 'src/api/maps'
 import { listPatrolRuns, patrolRunAction } from 'src/api/patrol-tasks'
 import { usePatrolMission } from 'stores/patrol-mission'
@@ -12,9 +12,9 @@ import { buildTourPolyline, planPatrolOrder } from 'src/utils/patrol-route'
 
 const { t } = useI18n()
 const mission = usePatrolMission()
-const mapManager = inject('mapManager')
-const robotPose = inject('robotPose')
-const publish = inject('publish')
+const mapManager = inject('mapManager', null)
+const robotPose = inject('robotPose', null)
+const publish = inject('publish', null)
 const navMode = inject('navMode', ref('auto'))
 const navState = inject('navState', ref('idle'))
 const pageMode = inject('pageMode', ref('default'))
@@ -24,6 +24,9 @@ const syncRobotToDefaultStart = inject('syncRobotToDefaultStart', null)
 const syncRobotToPose = inject('syncRobotToPose', null)
 const mapReady = inject('mapReady', ref(false))
 const loadedMapId = inject('loadedMapId', ref(null))
+/** global：执行由 GlobalPatrolDriver 负责，本组件只做地图 UI / 控制条 */
+const patrolDriverMode = inject('patrolDriverMode', ref('local'))
+const isUiOnly = computed(() => patrolDriverMode?.value === 'global')
 
 let lastAdvanceAt = 0
 let startedRunId = null
@@ -139,7 +142,7 @@ async function resolveStart () {
 }
 
 function publishGoal (point) {
-  if (!point?.pose) return
+  if (!point?.pose || typeof publish !== 'function') return
   publish('/goal_pose', {
     header: stampHeader(),
     pose: {
@@ -223,6 +226,7 @@ function takeNextRun (resp) {
  * 若当前无本地会话，则认领并开跑（调度接力 / 页面重开）。
  */
 async function claimOrphanedRunning () {
+  if (isUiOnly.value) return
   if (mission.active || mission.pending) return
   const mapId = loadedMapId?.value
   if (!mapId) return
@@ -301,6 +305,14 @@ function advance () {
 }
 
 async function tryStartPending () {
+  if (isUiOnly.value) {
+    // 全局驱动已开跑：仅补画路线
+    if (mission.active && mission.ordered.length) {
+      const start = await resolveStart()
+      if (start) drawTour(start, mission.ordered)
+    }
+    return
+  }
   if (!mission.pending || !mission.points.length) return
   if (startedRunId === mission.runId) return
   if (!mapReady?.value && !mapManager?.mapInfo) return
@@ -389,6 +401,16 @@ async function stopMission () {
 
 // 任务结果页取消等：会话结束后也恢复全图格栅
 watch(
+  () => [mission.active, mission.ordered, isUiOnly.value],
+  async () => {
+    if (!isUiOnly.value || !mission.active || !mission.ordered.length) return
+    const start = await resolveStart()
+    if (start) drawTour(start, mission.ordered)
+  },
+  { deep: true }
+)
+
+watch(
   () => mission.active,
   (active, was) => {
     if (was && !active && !mission.pending) {
@@ -404,6 +426,7 @@ watch(
 )
 
 watch(navState, (state, prev) => {
+  if (isUiOnly.value) return
   if (!mission.active || mission.paused) return
   const hit = state === 'arrived' || (prev === 'navigating' && state === 'idle')
   if (!hit) return
@@ -423,8 +446,10 @@ watch(() => loadedMapId?.value, () => {
 onMounted(() => {
   resumeActiveUi()
   tryStartPending()
-  void claimOrphanedRunning()
-  claimTimer = setInterval(() => { void claimOrphanedRunning() }, CLAIM_POLL_MS)
+  if (!isUiOnly.value) {
+    void claimOrphanedRunning()
+    claimTimer = setInterval(() => { void claimOrphanedRunning() }, CLAIM_POLL_MS)
+  }
   ensureChargePoint().then((c) => {
     if (c) mapManager?.drawChargeMarker?.(c)
   })
