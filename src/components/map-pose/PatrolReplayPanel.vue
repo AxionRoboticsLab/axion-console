@@ -1,7 +1,6 @@
 <script setup>
 /**
- * 录包回放：优先播真实 video url；无文件时仍用 video + 原生控件，
- * 并用点位时间轴驱动演示进度。
+ * 录包回放：优先播真实 video url；无文件时用演示叠加 + 自定义控件。
  */
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -49,8 +48,8 @@ async function playDemo () {
   playing.value = true
   stopTimer()
   const el = videoRef.value
-  if (el) {
-    try { await el.play() } catch (_) { /* 无源时可能失败，忽略 */ }
+  if (el && hasRealVideo.value) {
+    try { await el.play() } catch (_) { /* ignore */ }
   }
   timer = setInterval(() => {
     if (cursor.value >= total.value) {
@@ -71,9 +70,7 @@ function resetDemo () {
   pauseDemo()
   cursor.value = 0
   const el = videoRef.value
-  if (el) {
-    el.currentTime = 0
-  }
+  if (el) el.currentTime = 0
 }
 
 function toggleMute () {
@@ -81,14 +78,32 @@ function toggleMute () {
   if (videoRef.value) videoRef.value.muted = muted.value
 }
 
+async function onPlayClick () {
+  if (hasRealVideo.value) {
+    try {
+      await videoRef.value?.play()
+      playing.value = true
+    } catch (_) { /* ignore */ }
+    return
+  }
+  playDemo()
+}
+
+function onPauseClick () {
+  if (hasRealVideo.value) {
+    videoRef.value?.pause()
+    playing.value = false
+    return
+  }
+  pauseDemo()
+}
+
 function onVideoPlay () {
   playing.value = true
-  if (!hasRealVideo.value && !timer) playDemo()
 }
 
 function onVideoPause () {
   playing.value = false
-  stopTimer()
 }
 
 watch(
@@ -106,76 +121,84 @@ onUnmounted(() => stopTimer())
 <template>
   <div class="patrol-replay">
     <div class="patrol-replay__title">{{ t('patrol_replay_title') }}</div>
-    <div class="text-caption text-grey-7 q-mb-sm">{{ t('patrol_replay_hint') }}</div>
+    <div class="patrol-replay__hint">{{ t('patrol_replay_hint') }}</div>
 
-    <div class="patrol-replay__frame">
-      <video
-        ref="videoRef"
-        class="patrol-replay__video"
-        controls
-        playsinline
-        preload="metadata"
-        :src="videoUrl || undefined"
-        :muted="muted"
-        @play="onVideoPlay"
-        @pause="onVideoPause"
-      />
-
-      <div v-if="!hasRealVideo" class="patrol-replay__overlay">
-        <div class="patrol-replay__overlay-main">
-          <q-icon name="movie" size="36px" color="white"/>
-          <div class="q-mt-xs">{{ t('patrol_replay_demo_mode') }}</div>
-          <div class="text-caption q-mt-xs" style="opacity: 0.85">
+    <div class="patrol-replay__panel">
+      <div class="patrol-replay__frame">
+        <video
+          v-if="hasRealVideo"
+          ref="videoRef"
+          class="patrol-replay__video"
+          controls
+          playsinline
+          preload="metadata"
+          :src="videoUrl"
+          :muted="muted"
+          @play="onVideoPlay"
+          @pause="onVideoPause"
+        />
+        <div v-else class="patrol-replay__stage">
+          <q-icon name="movie" size="40px" color="teal-7"/>
+          <div class="patrol-replay__stage-title">{{ t('patrol_replay_demo_mode') }}</div>
+          <div class="patrol-replay__stage-sub">
             {{ t('patrol_replay_now') }}: {{ currentLabel }}
             ({{ Math.min(cursor, total) }}/{{ total }})
           </div>
-        </div>
-        <div class="row q-gutter-xs justify-center q-mt-sm patrol-replay__dots">
-          <q-badge
-            v-for="p in waypoints"
-            :key="p.i"
-            :color="p.i < cursor ? 'teal' : 'grey-7'"
-            :outline="p.i >= cursor"
-          >
-            {{ p.name }}
-          </q-badge>
+          <div class="patrol-replay__dots">
+            <q-badge
+              v-for="p in waypoints"
+              :key="p.i"
+              :color="p.i < cursor ? 'teal' : 'grey-5'"
+              :outline="p.i >= cursor"
+              class="q-ma-xs"
+            >
+              {{ p.name }}
+            </q-badge>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="row items-center q-gutter-sm q-mt-md">
-      <q-btn
-        dense unelevated
-        color="primary"
-        icon="play_arrow"
-        :label="t('patrol_replay_play')"
-        :disable="playing"
-        @click="hasRealVideo ? videoRef?.play() : playDemo()"
-      />
-      <q-btn
-        dense unelevated
-        color="warning"
-        text-color="dark"
-        icon="pause"
-        :label="t('patrol_task_pause')"
-        :disable="!playing"
-        @click="hasRealVideo ? videoRef?.pause() : pauseDemo()"
-      />
-      <q-btn
-        dense outline
-        color="grey-8"
-        :icon="muted ? 'volume_off' : 'volume_up'"
-        :label="muted ? t('patrol_replay_unmute') : t('patrol_replay_mute')"
-        @click="toggleMute"
-      />
-      <q-btn dense flat icon="replay" :label="t('patrol_replay_reset')" @click="resetDemo"/>
+      <div class="patrol-replay__actions">
+        <q-btn
+          dense unelevated no-wrap
+          color="primary"
+          icon="play_arrow"
+          :label="t('patrol_replay_play')"
+          :disable="playing"
+          @click="onPlayClick"
+        />
+        <q-btn
+          dense unelevated no-wrap
+          color="warning"
+          text-color="dark"
+          icon="pause"
+          :label="t('patrol_task_pause')"
+          :disable="!playing"
+          @click="onPauseClick"
+        />
+        <q-btn
+          dense outline no-wrap
+          color="grey-8"
+          :icon="muted ? 'volume_off' : 'volume_up'"
+          :label="muted ? t('patrol_replay_unmute') : t('patrol_replay_mute')"
+          @click="toggleMute"
+        />
+        <q-btn
+          dense flat no-wrap
+          icon="replay"
+          :label="t('patrol_replay_reset')"
+          @click="resetDemo"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .patrol-replay {
-  height: 100%;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
 }
 
 .patrol-replay__title {
@@ -185,41 +208,76 @@ onUnmounted(() => stopTimer())
   margin-bottom: 0.35rem;
 }
 
+.patrol-replay__hint {
+  font-size: 0.78rem;
+  color: #78909c;
+  margin-bottom: 0.65rem;
+  line-height: 1.4;
+}
+
+.patrol-replay__panel {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: #fafafa;
+  padding: 0.85rem;
+  box-sizing: border-box;
+}
+
 .patrol-replay__frame {
-  position: relative;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
   overflow: hidden;
   background: #111;
-  min-height: 260px;
 }
 
 .patrol-replay__video {
   display: block;
   width: 100%;
-  min-height: 260px;
-  max-height: 360px;
+  height: auto;
+  min-height: 220px;
+  max-height: 340px;
   object-fit: contain;
   background: #000;
+  vertical-align: top;
 }
 
-.patrol-replay__overlay {
-  position: absolute;
-  inset: 0;
-  bottom: 42px; /* 避开原生 controls */
+.patrol-replay__stage {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(20, 40, 40, 0.55), rgba(10, 10, 10, 0.35));
-  color: #fff;
-  padding: 1rem;
+  min-height: 220px;
+  padding: 1.25rem 1rem;
   text-align: center;
+  background: linear-gradient(160deg, #e0f2f1 0%, #eceff1 55%, #f5f5f5 100%);
+  color: #37474f;
+}
+
+.patrol-replay__stage-title {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.patrol-replay__stage-sub {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: #607d8b;
 }
 
 .patrol-replay__dots {
+  display: flex;
   flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.75rem;
   max-width: 100%;
+}
+
+.patrol-replay__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 </style>

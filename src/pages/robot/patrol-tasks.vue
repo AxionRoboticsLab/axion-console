@@ -357,9 +357,9 @@
           <q-btn flat round dense icon="close" v-close-popup/>
         </q-card-section>
         <q-separator/>
-        <q-card-section v-if="report" class="q-pa-md" style="max-height: 82vh; overflow: auto">
-          <div class="column q-gutter-md">
-            <div>
+        <q-card-section v-if="report" class="patrol-report__body q-pa-md">
+          <div class="patrol-report__stack">
+            <section class="patrol-report__block">
               <div class="patrol-report__section-title">{{ t('patrol_task_report_summary') }}</div>
               <div class="patrol-report__summary">
                 <div class="patrol-report__kv">
@@ -404,9 +404,9 @@
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div>
+            <section class="patrol-report__block">
               <div class="patrol-report__section-title">{{ t('patrol_task_route') }}</div>
               <div class="patrol-report__panel">
                 <div class="patrol-report__route">
@@ -414,9 +414,9 @@
                   <span v-if="report.charge"> → {{ t('charge_point') }}</span>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div>
+            <section class="patrol-report__block">
               <PatrolReplayPanel
                 v-if="showPlayback"
                 :report="report"
@@ -428,11 +428,11 @@
                   <div class="q-mt-sm text-grey-7">{{ t('patrol_replay_disabled') }}</div>
                 </div>
               </template>
-            </div>
+            </section>
 
-            <div>
+            <section class="patrol-report__block">
               <div class="patrol-report__section-title">{{ t('patrol_task_report_timeline') }}</div>
-              <div class="patrol-report__panel">
+              <div class="patrol-report__panel patrol-report__timeline-wrap">
                 <q-timeline color="primary" dense class="patrol-report__timeline">
                   <q-timeline-entry
                     v-for="(ev, idx) in (report.timeline || [])"
@@ -444,7 +444,7 @@
                   />
                 </q-timeline>
               </div>
-            </div>
+            </section>
           </div>
         </q-card-section>
       </q-card>
@@ -456,6 +456,23 @@
 .patrol-report-card {
   width: min(56rem, 96vw);
   max-width: 96vw;
+}
+
+.patrol-report__body {
+  max-height: 82vh;
+  overflow: auto;
+}
+
+.patrol-report__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.patrol-report__block {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
 }
 
 .patrol-report__section-title {
@@ -471,6 +488,7 @@
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   background: #fafafa;
+  box-sizing: border-box;
 }
 
 .patrol-report__summary {
@@ -506,19 +524,31 @@
   line-height: 1.5;
 }
 
+.patrol-report__timeline-wrap {
+  overflow: hidden;
+}
+
 .patrol-report__timeline {
   margin: 0;
+  padding: 0.25rem 0;
+}
+
+.patrol-report__timeline :deep(.q-timeline__content) {
+  padding-bottom: 0.75rem !important;
 }
 
 .patrol-report__timeline :deep(.q-timeline__title) {
   font-size: 0.82rem !important;
   font-weight: 500;
   line-height: 1.35;
+  margin: 0;
 }
 
 .patrol-report__timeline :deep(.q-timeline__subtitle) {
+  display: block;
   font-size: 0.72rem !important;
   opacity: 0.75;
+  margin-top: 0.15rem;
 }
 
 .patrol-replay-disabled {
