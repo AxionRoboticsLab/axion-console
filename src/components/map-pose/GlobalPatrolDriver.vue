@@ -278,6 +278,8 @@ function advance ({ fromNav = false } = {}) {
 
 async function tryStartPending () {
   if (!enabled.value || onMonitor.value) return
+  // 手动执行会跳转监控页：交给 PatrolMissionRunner（画最优路线 + 跟随）
+  if (mission.followOnEnter) return
   if (!mission.pending || !mission.points.length) return
   if (startedRunId === mission.runId) return
   if (startingMission) return
@@ -343,7 +345,7 @@ async function tryStartPending () {
 }
 
 watch(
-  () => [mission.pending, mission.runId, enabled.value, onMonitor.value],
+  () => [mission.pending, mission.runId, enabled.value, onMonitor.value, mission.followOnEnter],
   () => { void tryStartPending() },
   { deep: true, immediate: true }
 )

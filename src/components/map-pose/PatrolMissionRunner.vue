@@ -432,14 +432,40 @@ async function tryStartPending () {
 }
 
 async function resumeActiveUi () {
+  await syncActiveMissionUi({ republishGoal: true })
+}
+
+/**
+ * 监控页接管：补画最优路线 +（必要时）重发当前 goal。
+ * 覆盖「全局驱动先 beginRunning、本页未画线/未发出目标」的情况。
+ */
+async function syncActiveMissionUi ({ republishGoal = false } = {}) {
   if (!mission.active || !mission.ordered.length) return
+  if (!mapReady?.value && !mapManager?.mapInfo) return
+
   enterAutoFollow()
   await ensureChargePoint()
-  // 必须 await：否则 start 是 Promise，最优路线折线会画坏/看不见
   const live = (await resolveStart()) || { x: 0, y: 0 }
   drawTour(live, mission.ordered)
   startedRunId = mission.runId
   mission.driveLocal = true
+
+  if (mission.paused) return
+  if (returningHome.value || mission.returning) {
+    if (republishGoal) {
+      const goal = chargeAsGoal()
+      if (goal) publishGoal(goal)
+    }
+    return
+  }
+
+  if (!republishGoal) return
+
+  if (mission.index < 0) {
+    setTimeout(() => advance(), 200)
+  } else if (mission.index < mission.ordered.length) {
+    publishGoal(mission.ordered[mission.index])
+  }
 }
 
 async function pauseMission () {
@@ -471,13 +497,9 @@ watch(
     if (!mapReady?.value && !mapManager?.mapInfo) return
     const needTour = !mapManager?.patrolTour || mapManager._patrolTourPts == null
     const needPoses = !mapManager?.poseContainer?.children?.length
-    // 定时任务在其它页开跑后再进监控：补画最优巡检环与巡检点
+    // 定时任务在其它页开跑后再进监控：补画；缺线/缺点时重发当前目标
     if (needTour || needPoses) {
-      await ensureChargePoint()
-      const live = (await resolveStart()) || { x: 0, y: 0 }
-      drawTour(live, mission.ordered)
-      startedRunId = mission.runId
-      mission.driveLocal = true
+      await syncActiveMissionUi({ republishGoal: true })
     }
   },
   { deep: true }
