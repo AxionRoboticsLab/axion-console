@@ -296,7 +296,7 @@ export default {
 
   alarm_title: 'Alarms',
   alarm_template_hint: 'Frontend template only; backend APIs will follow.',
-  alarm_events_hint: 'Events + in-app alerts are live; rules come later. Mock rotates every ~45s: localization lost → edge hit → e-stop.',
+  alarm_events_hint: 'Events + in-app alerts are live; rules later. Inject via /alarm_event from tests — mock auto-push is off.',
   alarm_rules_later: 'Alarm rules will be available in a later release.',
   alarm_tab_list: 'Alarm list',
   alarm_tab_rules: 'Alarm rules',

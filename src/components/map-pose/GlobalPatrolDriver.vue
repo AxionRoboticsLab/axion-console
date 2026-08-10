@@ -337,7 +337,8 @@ async function tryStartPending () {
     if (mission.index >= 0 && mission.index < ordered.length) {
       publishGoal(ordered[mission.index])
     } else {
-      setTimeout(() => advance(), 280)
+      // 与 Runner 一致：只进一步到 index=0，不额外连发
+      advance()
     }
   } finally {
     startingMission = false

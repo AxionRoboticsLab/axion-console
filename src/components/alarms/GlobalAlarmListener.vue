@@ -87,9 +87,9 @@ function showAlert (ev) {
     timeout: 10000,
     type: levelType(ev.level),
     multiLine: true,
+    closeBtn: true,
     message: `${t('alarm_event')}: ${ev.event}`,
-    caption: `${t('alarm_level')}: ${levelLabel(ev.level)}  ·  ${t('alarm_time')}: ${ev.time}`,
-    actions: [{ icon: 'close', color: 'white', round: true, dense: true }]
+    caption: `${t('alarm_level')}: ${levelLabel(ev.level)}  ·  ${t('alarm_time')}: ${ev.time}`
   })
 }
 

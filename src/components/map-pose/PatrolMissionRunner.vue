@@ -29,6 +29,8 @@ let lastAdvanceAt = 0
 let startedRunId = null
 /** 防止 watch + onMounted 并发 tryStartPending 连续 advance 跳点 */
 let startingMission = false
+/** 统一首次/补发目标，避免 tryStart + syncUi 各排一次 advance 连发两个 goal */
+let ensureGoalTimer = null
 let claimTimer = null
 /** 巡检点跑完后正在返回充电点 */
 const returningHome = ref(false)
@@ -178,6 +180,31 @@ function publishGoal (point) {
     }
   })
   mapManager?.updateTargetPose?.(point.pose)
+}
+
+/** 确保当前应去的目标只发一次：index<0 → 去第 0 点；否则重发当前点（不跳号） */
+function ensureCurrentGoal () {
+  if (ensureGoalTimer) {
+    clearTimeout(ensureGoalTimer)
+    ensureGoalTimer = null
+  }
+  ensureGoalTimer = setTimeout(() => {
+    ensureGoalTimer = null
+    if (!mission.active || mission.paused) return
+    if (returningHome.value || mission.returning) {
+      const goal = chargeAsGoal()
+      if (goal) publishGoal(goal)
+      return
+    }
+    if (!mission.ordered.length) return
+    if (mission.index < 0) {
+      advance({ fromNav: false })
+      return
+    }
+    if (mission.index < mission.ordered.length) {
+      publishGoal(mission.ordered[mission.index])
+    }
+  }, 120)
 }
 
 function enterAutoFollow () {
@@ -420,12 +447,8 @@ async function tryStartPending () {
       })
     })
 
-    // 恢复：继续当前目标点；新建：从第一个点开始
-    if (mission.index >= 0 && mission.index < ordered.length) {
-      publishGoal(ordered[mission.index])
-    } else {
-      setTimeout(() => advance(), 280)
-    }
+    // 恢复：继续当前目标点；新建：由 ensureCurrentGoal 统一发第 0 点（防双 advance）
+    ensureCurrentGoal()
   } finally {
     startingMission = false
   }
@@ -436,8 +459,7 @@ async function resumeActiveUi () {
 }
 
 /**
- * 监控页接管：补画最优路线 +（必要时）重发当前 goal。
- * 覆盖「全局驱动先 beginRunning、本页未画线/未发出目标」的情况。
+ * 监控页接管：补画最优路线；目标只通过 ensureCurrentGoal 发送，避免与 tryStart 连发两个 goal。
  */
 async function syncActiveMissionUi ({ republishGoal = false } = {}) {
   if (!mission.active || !mission.ordered.length) return
@@ -451,21 +473,7 @@ async function syncActiveMissionUi ({ republishGoal = false } = {}) {
   mission.driveLocal = true
 
   if (mission.paused) return
-  if (returningHome.value || mission.returning) {
-    if (republishGoal) {
-      const goal = chargeAsGoal()
-      if (goal) publishGoal(goal)
-    }
-    return
-  }
-
-  if (!republishGoal) return
-
-  if (mission.index < 0) {
-    setTimeout(() => advance(), 200)
-  } else if (mission.index < mission.ordered.length) {
-    publishGoal(mission.ordered[mission.index])
-  }
+  if (republishGoal) ensureCurrentGoal()
 }
 
 async function pauseMission () {
@@ -551,6 +559,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   lastAdvanceAt = 0
+  if (ensureGoalTimer) {
+    clearTimeout(ensureGoalTimer)
+    ensureGoalTimer = null
+  }
   if (claimTimer) {
     clearInterval(claimTimer)
     claimTimer = null

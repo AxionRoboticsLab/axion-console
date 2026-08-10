@@ -296,7 +296,7 @@ export default {
 
   alarm_title: '告警管理',
   alarm_template_hint: '当前为前端模板数据，后端接口稍后对接。',
-  alarm_events_hint: '已对接事件触发与站内通知；告警规则稍后开放。mock 每约 45 秒轮播：定位失败 → 触边 → 急停。',
+  alarm_events_hint: '已对接事件入库与站内通知；规则稍后。异常由自动测试注入 /alarm_event，不再由 mock 自动推送。',
   alarm_rules_later: '告警规则配置将在后续版本开放。',
   alarm_tab_list: '告警列表',
   alarm_tab_rules: '告警规则',
