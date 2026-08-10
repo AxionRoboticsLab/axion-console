@@ -206,7 +206,7 @@ export default {
   patrol_task_loop_forever: '无限',
   patrol_task_loop_summary: '循环 {n} 次 · 间隔 {sec}s',
   patrol_task_schedule_time: '每日执行时刻',
-  patrol_task_schedule_time_hint: '每天此时间自动入队（调度器后续接入）',
+  patrol_task_schedule_time_hint: '每天此时间自动入队；若当时有任务在执行则排队，结束后自动接力',
   patrol_task_schedule_once: '指定执行时间（可选）',
   patrol_task_schedule_once_hint: '一次性定时；留空则仅按每日时刻',
   patrol_task_schedule_daily: '每日 {time}',

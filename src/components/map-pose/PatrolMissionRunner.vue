@@ -6,7 +6,7 @@ import { Notify } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getChargePoint } from 'src/api/maps'
-import { patrolRunAction } from 'src/api/patrol-tasks'
+import { listPatrolRuns, patrolRunAction } from 'src/api/patrol-tasks'
 import { usePatrolMission } from 'stores/patrol-mission'
 import { buildTourPolyline, planPatrolOrder } from 'src/utils/patrol-route'
 
@@ -27,11 +27,14 @@ const loadedMapId = inject('loadedMapId', ref(null))
 
 let lastAdvanceAt = 0
 let startedRunId = null
+let claimTimer = null
 /** 巡检点跑完后正在返回充电点 */
 const returningHome = ref(false)
 const chargePoint = ref(null)
 
 const CHARGE_NEAR_M = 0.35
+/** 认领调度器提升为 running、但前端尚未接管的任务 */
+const CLAIM_POLL_MS = 12000
 
 function stampHeader () {
   const now = Date.now()
@@ -212,6 +215,28 @@ function takeNextRun (resp) {
     mission.requestFromRun(next)
   } catch (e) {
     console.warn('[PatrolMission] claim next run failed', e)
+  }
+}
+
+/**
+ * 定时任务到点入池后，后端可能已将 waiting→running；
+ * 若当前无本地会话，则认领并开跑（调度接力 / 页面重开）。
+ */
+async function claimOrphanedRunning () {
+  if (mission.active || mission.pending) return
+  const mapId = loadedMapId?.value
+  if (!mapId) return
+  try {
+    const runs = await listPatrolRuns({ mapId, status: 'running' })
+    const orphan = (runs || []).find((r) => r?.id && r.id !== startedRunId)
+    if (!orphan) return
+    mission.requestFromRun(orphan)
+    Notify.create({
+      type: 'info',
+      message: t('patrol_task_execute_jump', { name: orphan.name || orphan.task_name || '' })
+    })
+  } catch (e) {
+    console.warn('[PatrolMission] claim orphaned run failed', e)
   }
 }
 
@@ -398,6 +423,8 @@ watch(() => loadedMapId?.value, () => {
 onMounted(() => {
   resumeActiveUi()
   tryStartPending()
+  void claimOrphanedRunning()
+  claimTimer = setInterval(() => { void claimOrphanedRunning() }, CLAIM_POLL_MS)
   ensureChargePoint().then((c) => {
     if (c) mapManager?.drawChargeMarker?.(c)
   })
@@ -405,6 +432,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   lastAdvanceAt = 0
+  if (claimTimer) {
+    clearInterval(claimTimer)
+    claimTimer = null
+  }
 })
 
 defineExpose({ stopMission, tryStartPending, ensureChargePoint })

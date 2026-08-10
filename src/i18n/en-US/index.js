@@ -206,7 +206,7 @@ export default {
   patrol_task_loop_forever: '∞',
   patrol_task_loop_summary: '{n} loops · {sec}s interval',
   patrol_task_schedule_time: 'Daily time',
-  patrol_task_schedule_time_hint: 'Enqueue daily at this time (scheduler later)',
+  patrol_task_schedule_time_hint: 'Enqueued daily; if busy, waits in pool then auto-starts',
   patrol_task_schedule_once: 'One-shot time (optional)',
   patrol_task_schedule_once_hint: 'Leave empty to use daily time only',
   patrol_task_schedule_daily: 'Daily {time}',
