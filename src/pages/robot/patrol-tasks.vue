@@ -10,6 +10,48 @@
 
     <q-tab-panels v-model="tab" animated class="col column bg-transparent q-pt-md">
       <q-tab-panel name="list" class="q-pa-none column col">
+        <q-card flat class="app-filter-card q-mb-md q-pa-md">
+          <div class="row q-col-gutter-md items-end">
+            <div class="col-12 col-sm-6 col-md-3">
+              <q-input
+                v-model="listFilters.name"
+                outlined dense clearable
+                :label="t('patrol_task_name')"
+                @keyup.enter="applyListFilters"
+              />
+            </div>
+            <div class="col-12 col-sm-6 col-md-2">
+              <q-select
+                v-model="listFilters.mapId"
+                outlined dense clearable emit-value map-options
+                :options="mapOptions"
+                :label="t('patrol_task_map')"
+                @update:model-value="onListMapFilterChange"
+              />
+            </div>
+            <div class="col-12 col-sm-6 col-md-2">
+              <q-select
+                v-model="listFilters.type"
+                outlined dense clearable emit-value map-options
+                :options="typeOptions"
+                :label="t('patrol_task_type')"
+              />
+            </div>
+            <div class="col-12 col-sm-6 col-md-3">
+              <q-select
+                v-model="listFilters.pointKey"
+                outlined dense clearable emit-value map-options
+                :options="listPointOptions"
+                :label="t('patrol_task_points')"
+              />
+            </div>
+            <div class="col-12 col-sm-6 col-md-2 row q-gutter-sm">
+              <q-btn color="primary" unelevated icon="search" :label="t('patrol_task_search')" @click="applyListFilters"/>
+              <q-btn flat icon="refresh" :label="t('patrol_task_reset')" @click="resetListFilters"/>
+            </div>
+          </div>
+        </q-card>
+
         <AppDataTable
           row-key="id"
           :rows="taskRows"
@@ -26,7 +68,7 @@
               @click="runSchedulerTick"
             />
             <q-btn color="primary" unelevated class="q-ml-sm" icon="add" :label="t('patrol_task_create')" @click="openCreate"/>
-            <q-btn flat class="q-ml-sm" icon="refresh" :label="t('patrol_task_reset')" @click="reloadTasks"/>
+            <q-btn flat class="q-ml-sm" icon="refresh" @click="reloadTasks"/>
           </template>
           <template #body-cell-mapName="props">
             <q-td :props="props">
@@ -167,6 +209,14 @@
           </template>
           <template #body-cell-actions="props">
             <q-td :props="props">
+              <q-btn
+                v-if="props.row.status === 'running' && !isMissionDriving(props.row)"
+                flat dense color="positive" icon="near_me"
+                :label="t('patrol_task_claim')"
+                @click="claimRun(props.row)"
+              >
+                <q-tooltip>{{ t('patrol_task_claim_hint') }}</q-tooltip>
+              </q-btn>
               <q-btn
                 v-if="props.row.status === 'running'"
                 flat dense color="warning" icon="pause"
@@ -487,14 +537,81 @@ function pointNamesOf (ids, mapId) {
   return (ids || []).map((id) => cache[id] || formPointCatalog.value.find((p) => p.id === id)?.name || String(id))
 }
 
-const taskRows = computed(() =>
-  tasks.value.map((row) => ({
-    ...row,
-    pointNames: pointNamesOf(row.pointIds, row.mapId)
-  }))
-)
+const listFilters = ref({ name: '', mapId: null, type: null, pointKey: null })
+const listFilterApplied = ref({ name: '', mapId: null, type: null, pointKey: null })
+
+const listPointOptions = computed(() => {
+  const mapId = listFilters.value.mapId
+  const mapIds = mapId != null
+    ? [mapId]
+    : [...new Set(tasks.value.map((r) => r.mapId).filter(Boolean))]
+  const opts = []
+  for (const mid of mapIds) {
+    const cache = pointNameCache.value[mid] || {}
+    const mapName = mapCatalog.value.find((m) => m.id === mid)?.map_name || ''
+    for (const [id, name] of Object.entries(cache)) {
+      opts.push({
+        label: mapId != null ? name : (mapName ? `${name} (${mapName})` : name),
+        value: `${mid}:${id}`
+      })
+    }
+  }
+  return opts
+})
+
+const taskRows = computed(() => {
+  const f = listFilterApplied.value
+  const nameQ = (f.name || '').trim().toLowerCase()
+  let pointMapId = null
+  let pointId = null
+  if (f.pointKey) {
+    const [mid, pid] = String(f.pointKey).split(':')
+    pointMapId = Number(mid)
+    pointId = Number(pid)
+  }
+  return tasks.value
+    .filter((row) => {
+      if (nameQ && !(row.name || '').toLowerCase().includes(nameQ)) return false
+      if (f.mapId != null && row.mapId !== f.mapId) return false
+      if (f.type && row.type !== f.type) return false
+      if (pointId != null) {
+        if (row.mapId !== pointMapId) return false
+        if (!(row.pointIds || []).map(Number).includes(pointId)) return false
+      }
+      return true
+    })
+    .map((row) => ({
+      ...row,
+      pointNames: pointNamesOf(row.pointIds, row.mapId)
+    }))
+})
 
 const resultFilters = ref({ name: '', status: null, result: null, range: null })
+
+function applyListFilters () {
+  listFilterApplied.value = { ...listFilters.value }
+  taskPagination.value = {
+    ...taskPagination.value,
+    page: 1,
+    rowsNumber: taskRows.value.length
+  }
+}
+
+function resetListFilters () {
+  listFilters.value = { name: '', mapId: null, type: null, pointKey: null }
+  applyListFilters()
+}
+
+function onListMapFilterChange () {
+  listFilters.value.pointKey = null
+}
+
+watch(taskRows, (rows) => {
+  taskPagination.value = {
+    ...taskPagination.value,
+    rowsNumber: rows.length
+  }
+})
 
 function typeLabel (v) {
   return typeOptions.value.find((o) => o.value === v)?.label || v
@@ -542,6 +659,18 @@ function shortExecId (id) {
 function canExecute (row) {
   return Boolean(activeMapId.value && row.mapId === activeMapId.value)
 }
+function isMissionDriving (row) {
+  return mission.active && mission.runId === row.id
+}
+async function claimRun (row) {
+  try {
+    mission.requestFromRun(row)
+    Notify.create({ type: 'positive', message: t('patrol_task_execute_jump', { name: row.name }) })
+    await router.push({ name: 'robot_monitor' })
+  } catch (e) {
+    Notify.create({ type: 'negative', message: e.message || t('patrol_task_execute_failed') })
+  }
+}
 function canViewReport (row) {
   return row.status === 'done' || row.status === 'cancelled' || Boolean(row.result)
 }
@@ -562,7 +691,7 @@ function timelineIcon (ev) {
 }
 
 function onTaskRequest (req) {
-  taskPagination.value = { ...taskPagination.value, ...req.pagination, rowsNumber: tasks.value.length }
+  taskPagination.value = { ...taskPagination.value, ...req.pagination, rowsNumber: taskRows.value.length }
 }
 function onResultRequest (req) {
   resultPagination.value = { ...resultPagination.value, ...req.pagination, rowsNumber: runs.value.length }

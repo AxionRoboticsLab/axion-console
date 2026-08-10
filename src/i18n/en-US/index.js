@@ -177,6 +177,8 @@ export default {
   patrol_task_delete: 'Delete',
   patrol_task_execute: 'Run',
   patrol_task_pause: 'Pause',
+  patrol_task_claim: 'Take over',
+  patrol_task_claim_hint: 'Marked running in backend but console has not sent goals yet',
   patrol_task_resume: 'Resume',
   patrol_task_cancel: 'Cancel',
   patrol_task_name: 'Task name',

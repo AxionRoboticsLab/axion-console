@@ -177,6 +177,8 @@ export default {
   patrol_task_delete: '删除',
   patrol_task_execute: '执行',
   patrol_task_pause: '暂停',
+  patrol_task_claim: '接管执行',
+  patrol_task_claim_hint: '后端已标记执行中，但导航页尚未发目标点；点击后跳转并开跑',
   patrol_task_resume: '继续',
   patrol_task_cancel: '取消',
   patrol_task_name: '任务名称',
