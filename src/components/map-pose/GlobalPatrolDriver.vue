@@ -32,12 +32,14 @@ const onMonitor = computed(() => {
 
 let lastAdvanceAt = 0
 let startedRunId = null
+let startingMission = false
 let claimTimer = null
 let returningHome = false
 let chargePoint = null
 let activeMapId = null
 
 const CHARGE_NEAR_M = 0.35
+const ARRIVE_NEAR_M = 0.45
 const CLAIM_POLL_MS = 8000
 
 function stampHeader () {
@@ -107,6 +109,31 @@ function nearCharge (xy) {
   const c = chargePoint
   if (!xy || !c) return false
   return Math.hypot(xy.x - c.x, xy.y - c.y) <= CHARGE_NEAR_M
+}
+
+function liveXy () {
+  return normalizePose(ros.robotPose?.value)
+}
+
+function pointXy (p) {
+  if (!p) return null
+  if (p.pose?.position) {
+    return { x: Number(p.pose.position.x) || 0, y: Number(p.pose.position.y) || 0 }
+  }
+  const x = Number(p.x)
+  const y = Number(p.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return { x, y }
+}
+
+function nearCurrentGoal () {
+  const live = liveXy()
+  if (!live) return false
+  if (returningHome) return nearCharge(live)
+  if (mission.index < 0) return true
+  const pt = pointXy(mission.ordered[mission.index])
+  if (!pt) return false
+  return Math.hypot(live.x - pt.x, live.y - pt.y) <= ARRIVE_NEAR_M
 }
 
 async function refreshActiveMap () {
@@ -218,9 +245,13 @@ function beginReturnHome () {
   Notify.create({ type: 'info', message: t('patrol_return_charge') })
 }
 
-function advance () {
+function advance ({ fromNav = false } = {}) {
   if (onMonitor.value) return
   if (!mission.active || mission.paused) return
+  if (fromNav && !nearCurrentGoal()) {
+    console.warn('[GlobalPatrol] ignore advance: not near current goal', mission.index)
+    return
+  }
   if (returningHome) {
     finishMissionOk('patrol_return_charge_done')
     return
@@ -231,6 +262,7 @@ function advance () {
     return
   }
   mission.setIndex(next)
+  lastAdvanceAt = Date.now()
   void syncRunAction('progress', { progress_index: next })
   const point = mission.ordered[next]
   publishGoal(point)
@@ -248,53 +280,65 @@ async function tryStartPending () {
   if (!enabled.value || onMonitor.value) return
   if (!mission.pending || !mission.points.length) return
   if (startedRunId === mission.runId) return
+  if (startingMission) return
   if (!mission.driveLocal && mission.phase === 'idle') {
     mission.driveLocal = true
   }
 
-  await refreshActiveMap()
-  await ensureChargePoint()
-  const start = resolveStart()
+  startingMission = true
+  try {
+    const runId = mission.runId
+    startedRunId = runId
 
-  let ordered
-  if (mission.useServerOrder && mission.ordered.length) {
-    ordered = mission.ordered
-  } else {
-    ordered = planPatrolOrder(start, mission.points)
-    mission.setOrdered(ordered)
-  }
+    await refreshActiveMap()
+    await ensureChargePoint()
+    if (!mission.pending || mission.runId !== runId) return
 
-  if (typeof mission.runId === 'number') {
-    void syncRunAction('replan', {
-      start_x: start.x,
-      start_y: start.y,
-      start_yaw: start.yaw || 0,
-      ordered: ordered.map((p) => ({
-        id: p.id,
-        name: p.name,
-        x: p.x,
-        y: p.y,
-        yaw: p.yaw || 0
-      }))
+    const start = resolveStart()
+
+    let ordered
+    if (mission.useServerOrder && mission.ordered.length) {
+      ordered = mission.ordered
+    } else {
+      ordered = planPatrolOrder(start, mission.points)
+      mission.setOrdered(ordered)
+    }
+
+    if (typeof mission.runId === 'number') {
+      void syncRunAction('replan', {
+        start_x: start.x,
+        start_y: start.y,
+        start_yaw: start.yaw || 0,
+        ordered: ordered.map((p) => ({
+          id: p.id,
+          name: p.name,
+          x: p.x,
+          y: p.y,
+          yaw: p.yaw || 0
+        }))
+      })
+    }
+
+    if (!mission.pending || mission.runId !== runId) return
+
+    mission.beginRunning()
+    returningHome = false
+
+    Notify.create({
+      type: 'positive',
+      message: t(nearCharge(start) ? 'patrol_mission_from_charge' : 'patrol_mission_from_current', {
+        name: mission.taskName,
+        n: ordered.length
+      })
     })
-  }
 
-  mission.beginRunning()
-  returningHome = false
-  startedRunId = mission.runId
-
-  Notify.create({
-    type: 'positive',
-    message: t(nearCharge(start) ? 'patrol_mission_from_charge' : 'patrol_mission_from_current', {
-      name: mission.taskName,
-      n: ordered.length
-    })
-  })
-
-  if (mission.index >= 0 && mission.index < ordered.length) {
-    publishGoal(ordered[mission.index])
-  } else {
-    setTimeout(() => advance(), 280)
+    if (mission.index >= 0 && mission.index < ordered.length) {
+      publishGoal(ordered[mission.index])
+    } else {
+      setTimeout(() => advance(), 280)
+    }
+  } finally {
+    startingMission = false
   }
 }
 
@@ -312,9 +356,10 @@ watch(
     const hit = state === 'arrived' || (prev === 'navigating' && state === 'idle')
     if (!hit) return
     const now = Date.now()
-    if (now - lastAdvanceAt < 400) return
+    if (now - lastAdvanceAt < 800) return
+    if (!nearCurrentGoal()) return
     lastAdvanceAt = now
-    setTimeout(() => advance(), 150)
+    setTimeout(() => advance({ fromNav: true }), 150)
   }
 )
 

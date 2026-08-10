@@ -27,12 +27,16 @@ const loadedMapId = inject('loadedMapId', ref(null))
 
 let lastAdvanceAt = 0
 let startedRunId = null
+/** 防止 watch + onMounted 并发 tryStartPending 连续 advance 跳点 */
+let startingMission = false
 let claimTimer = null
 /** 巡检点跑完后正在返回充电点 */
 const returningHome = ref(false)
 const chargePoint = ref(null)
 
 const CHARGE_NEAR_M = 0.35
+/** 到点判定（略宽于 mock goal_xy_tol，避免误触跳点） */
+const ARRIVE_NEAR_M = 0.45
 /** 认领调度器提升为 running、但前端尚未接管的任务 */
 const CLAIM_POLL_MS = 8000
 
@@ -92,6 +96,32 @@ function nearCharge (xy) {
   const c = chargePoint.value
   if (!xy || !c) return false
   return Math.hypot(xy.x - c.x, xy.y - c.y) <= CHARGE_NEAR_M
+}
+
+function liveXy () {
+  return normalizePose(robotPose?.value) || normalizePose(mapManager?.pose)
+}
+
+function pointXy (p) {
+  if (!p) return null
+  if (p.pose?.position) {
+    return { x: Number(p.pose.position.x) || 0, y: Number(p.pose.position.y) || 0 }
+  }
+  const x = Number(p.x)
+  const y = Number(p.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return { x, y }
+}
+
+/** 当前目标附近才允许连跑推进，避免假 arrived / 并发 advance 跳过巡检点 */
+function nearCurrentGoal () {
+  const live = liveXy()
+  if (!live) return false
+  if (returningHome.value) return nearCharge(live)
+  if (mission.index < 0) return true
+  const pt = pointXy(mission.ordered[mission.index])
+  if (!pt) return false
+  return Math.hypot(live.x - pt.x, live.y - pt.y) <= ARRIVE_NEAR_M
 }
 
 /** mock 仍停在 (0,0) 且地图中心远离原点 → 不可信 */
@@ -294,8 +324,14 @@ function beginReturnHome () {
   })
 }
 
-function advance () {
+function advance ({ fromNav = false } = {}) {
   if (!mission.active || mission.paused) return
+
+  // 导航到点推进：必须真的靠近当前目标，防止假状态连跳
+  if (fromNav && !nearCurrentGoal()) {
+    console.warn('[PatrolMission] ignore advance: not near current goal', mission.index)
+    return
+  }
 
   if (returningHome.value) {
     finishMissionOk('patrol_return_charge_done')
@@ -308,6 +344,7 @@ function advance () {
     return
   }
   mission.setIndex(next)
+  lastAdvanceAt = Date.now()
   void syncRunAction('progress', { progress_index: next })
   const point = mission.ordered[next]
   publishGoal(point)
@@ -324,58 +361,73 @@ function advance () {
 async function tryStartPending () {
   if (!mission.pending || !mission.points.length) return
   if (startedRunId === mission.runId) return
+  if (startingMission) return
   if (!mapReady?.value && !mapManager?.mapInfo) return
 
-  mission.driveLocal = true
-  enterAutoFollow()
-  await ensureChargePoint()
+  startingMission = true
+  try {
+    // 在 await 前占位，避免并发启动连续 advance 跳过首个巡检点
+    const runId = mission.runId
+    startedRunId = runId
 
-  const start = await resolveStart()
-  if (!start) return
+    mission.driveLocal = true
+    enterAutoFollow()
+    await ensureChargePoint()
 
-  let ordered
-  if (mission.useServerOrder && mission.ordered.length) {
-    ordered = mission.ordered
-  } else {
-    ordered = planPatrolOrder(start, mission.points)
-    mission.setOrdered(ordered)
-  }
+    if (!mission.pending || mission.runId !== runId) return
 
-  // 用真实位姿回写规划（便于任务结果核对）
-  if (typeof mission.runId === 'number') {
-    void syncRunAction('replan', {
-      start_x: start.x,
-      start_y: start.y,
-      start_yaw: start.yaw || 0,
-      ordered: ordered.map((p) => ({
-        id: p.id,
-        name: p.name,
-        x: p.x,
-        y: p.y,
-        yaw: p.yaw || 0
-      }))
+    const start = await resolveStart()
+    if (!start) {
+      startedRunId = null
+      return
+    }
+    if (!mission.pending || mission.runId !== runId) return
+
+    let ordered
+    if (mission.useServerOrder && mission.ordered.length) {
+      ordered = mission.ordered
+    } else {
+      ordered = planPatrolOrder(start, mission.points)
+      mission.setOrdered(ordered)
+    }
+
+    // 用真实位姿回写规划（便于任务结果核对）
+    if (typeof mission.runId === 'number') {
+      void syncRunAction('replan', {
+        start_x: start.x,
+        start_y: start.y,
+        start_yaw: start.yaw || 0,
+        ordered: ordered.map((p) => ({
+          id: p.id,
+          name: p.name,
+          x: p.x,
+          y: p.y,
+          yaw: p.yaw || 0
+        }))
+      })
+    }
+
+    drawTour(start, ordered)
+    mission.beginRunning()
+    returningHome.value = false
+
+    const fromCharge = nearCharge(start)
+    Notify.create({
+      type: 'positive',
+      message: t(fromCharge ? 'patrol_mission_from_charge' : 'patrol_mission_from_current', {
+        name: mission.taskName,
+        n: ordered.length
+      })
     })
-  }
 
-  drawTour(start, ordered)
-  mission.beginRunning()
-  returningHome.value = false
-  startedRunId = mission.runId
-
-  const fromCharge = nearCharge(start)
-  Notify.create({
-    type: 'positive',
-    message: t(fromCharge ? 'patrol_mission_from_charge' : 'patrol_mission_from_current', {
-      name: mission.taskName,
-      n: ordered.length
-    })
-  })
-
-  // 恢复：继续当前目标点；新建：从第一个点开始
-  if (mission.index >= 0 && mission.index < ordered.length) {
-    publishGoal(ordered[mission.index])
-  } else {
-    setTimeout(() => advance(), 280)
+    // 恢复：继续当前目标点；新建：从第一个点开始
+    if (mission.index >= 0 && mission.index < ordered.length) {
+      publishGoal(ordered[mission.index])
+    } else {
+      setTimeout(() => advance(), 280)
+    }
+  } finally {
+    startingMission = false
   }
 }
 
@@ -448,12 +500,14 @@ watch(
 
 watch(navState, (state, prev) => {
   if (!mission.active || mission.paused) return
+  // 以 arrived 为准；navigating→idle 仅作丢包兜底，且必须靠近当前目标
   const hit = state === 'arrived' || (prev === 'navigating' && state === 'idle')
   if (!hit) return
   const now = Date.now()
-  if (now - lastAdvanceAt < 400) return
+  if (now - lastAdvanceAt < 800) return
+  if (!nearCurrentGoal()) return
   lastAdvanceAt = now
-  setTimeout(() => advance(), 150)
+  setTimeout(() => advance({ fromNav: true }), 150)
 })
 
 watch(() => loadedMapId?.value, () => {
@@ -465,7 +519,7 @@ watch(() => loadedMapId?.value, () => {
 
 onMounted(() => {
   resumeActiveUi()
-  tryStartPending()
+  // tryStartPending 由 watch(immediate) 触发，避免与此处并发双启动跳点
   void claimOrphanedRunning()
   claimTimer = setInterval(() => { void claimOrphanedRunning() }, CLAIM_POLL_MS)
   ensureChargePoint().then((c) => {
