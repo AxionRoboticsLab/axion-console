@@ -8,6 +8,7 @@ import MapSelector from 'components/amr-control/MapSelector.vue'
 import MapCreate from 'components/amr-control/MapCreate.vue'
 import PoseManager from 'components/map-pose/PoseManager.vue'
 import PatrolMissionRunner from 'components/map-pose/PatrolMissionRunner.vue'
+import EStopControls from 'components/robot/EStopControls.vue'
 import { getActiveMap, getChargePoint, setChargePoint } from 'src/api/maps'
 import { Notify, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
@@ -611,7 +612,10 @@ watch(connected, (ok) => {
                 @click="setChargeAtRobot"
               />
             </template>
+            <EStopControls v-if="!mapEditMode" class="q-mt-sm"/>
           </template>
+
+          <EStopControls v-if="isMappingWorkspace && !mapEditMode" class="q-mt-sm"/>
         </div>
       </div>
 

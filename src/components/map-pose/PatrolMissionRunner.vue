@@ -31,6 +31,10 @@ let startedRunId = null
 let startingMission = false
 /** 统一首次/补发目标，避免 tryStart + syncUi 各排一次 advance 连发两个 goal */
 let ensureGoalTimer = null
+/** 发 goal 后须先见到 navigating 才认 arrived，避免「发目标瞬间的旧 arrived」或防抖把到点吞掉 */
+let navArmed = false
+let goalSentAt = 0
+let stuckTimer = null
 let claimTimer = null
 /** 巡检点跑完后正在返回充电点 */
 const returningHome = ref(false)
@@ -41,6 +45,7 @@ const CHARGE_NEAR_M = 0.35
 const ARRIVE_NEAR_M = 0.45
 /** 认领调度器提升为 running、但前端尚未接管的任务 */
 const CLAIM_POLL_MS = 8000
+const STUCK_CHECK_MS = 2500
 
 function stampHeader () {
   const now = Date.now()
@@ -170,16 +175,53 @@ async function resolveStart () {
   return placeAtDefaultStart()
 }
 
+function pointPose (point) {
+  if (!point) return null
+  if (point.pose?.position) {
+    return {
+      position: { ...point.pose.position },
+      orientation: { ...(point.pose.orientation || { x: 0, y: 0, z: 0, w: 1 }) }
+    }
+  }
+  const x = Number(point.x)
+  const y = Number(point.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  const yaw = Number(point.yaw) || 0
+  return {
+    position: { x, y, z: 0 },
+    orientation: {
+      x: 0,
+      y: 0,
+      z: Math.sin(yaw / 2),
+      w: Math.cos(yaw / 2)
+    }
+  }
+}
+
 function publishGoal (point) {
-  if (!point?.pose || typeof publish !== 'function') return
+  const pose = pointPose(point)
+  if (!pose || typeof publish !== 'function') {
+    console.warn('[PatrolMission] publishGoal skipped', {
+      hasPublish: typeof publish === 'function',
+      point
+    })
+    return
+  }
+  // 急停只由 UI「解除急停」控制，发 goal 不再自动清急停
+  navArmed = false
+  goalSentAt = Date.now()
+  const sent = goalSentAt
   publish('/goal_pose', {
     header: stampHeader(),
-    pose: {
-      position: { ...point.pose.position },
-      orientation: { ...point.pose.orientation }
-    }
+    pose
   })
-  mapManager?.updateTargetPose?.(point.pose)
+  mapManager?.updateTargetPose?.(pose)
+  // mock 若已在 navigating，可能不重发同名状态 → 延迟武装，避免永远等不到到点
+  setTimeout(() => {
+    if (!mission.active || mission.paused) return
+    if (goalSentAt !== sent) return
+    navArmed = true
+  }, 350)
 }
 
 /** 确保当前应去的目标只发一次：index<0 → 去第 0 点；否则重发当前点（不跳号） */
@@ -205,6 +247,29 @@ function ensureCurrentGoal () {
       publishGoal(mission.ordered[mission.index])
     }
   }, 120)
+}
+
+function startStuckWatch () {
+  if (stuckTimer) return
+  stuckTimer = setInterval(() => {
+    if (!mission.active || mission.paused) return
+    if (!mission.driveLocal) return
+    const state = navState?.value
+    // 已在走：不打扰
+    if (state === 'navigating') return
+    // 已到当前目标附近：等 arrived 推进即可
+    if (nearCurrentGoal()) return
+    // idle/arrived 却离目标很远 → 重发目标
+    if (Date.now() - goalSentAt < STUCK_CHECK_MS) return
+    console.warn('[PatrolMission] stuck recovery: republish goal', mission.index, state)
+    ensureCurrentGoal()
+  }, STUCK_CHECK_MS)
+}
+
+function stopStuckWatch () {
+  if (!stuckTimer) return
+  clearInterval(stuckTimer)
+  stuckTimer = null
 }
 
 function enterAutoFollow () {
@@ -327,6 +392,8 @@ function restoreMapAfterMission () {
 
 async function finishMissionOk (msgKey) {
   returningHome.value = false
+  navArmed = false
+  stopStuckWatch()
   const resp = await syncRunAction('complete', { result_ok: true, progress_index: mission.index })
   mission.complete(true)
   mapManager?.clearPatrolTour?.()
@@ -371,7 +438,6 @@ function advance ({ fromNav = false } = {}) {
     return
   }
   mission.setIndex(next)
-  lastAdvanceAt = Date.now()
   void syncRunAction('progress', { progress_index: next })
   const point = mission.ordered[next]
   publishGoal(point)
@@ -437,6 +503,7 @@ async function tryStartPending () {
     drawTour(start, ordered)
     mission.beginRunning()
     returningHome.value = false
+    startStuckWatch()
 
     const fromCharge = nearCharge(start)
     Notify.create({
@@ -471,6 +538,7 @@ async function syncActiveMissionUi ({ republishGoal = false } = {}) {
   drawTour(live, mission.ordered)
   startedRunId = mission.runId
   mission.driveLocal = true
+  startStuckWatch()
 
   if (mission.paused) return
   if (republishGoal) ensureCurrentGoal()
@@ -488,6 +556,8 @@ async function resumeMission () {
 
 async function stopMission () {
   returningHome.value = false
+  navArmed = false
+  stopStuckWatch()
   const resp = await syncRunAction('cancel')
   mission.cancel()
   mapManager?.clearPatrolTour?.()
@@ -516,6 +586,8 @@ watch(
 watch(
   () => mission.active,
   (active, was) => {
+    if (active) startStuckWatch()
+    else stopStuckWatch()
     if (was && !active && !mission.pending) {
       restoreMapAfterMission()
     }
@@ -530,14 +602,20 @@ watch(
 
 watch(navState, (state, prev) => {
   if (!mission.active || mission.paused) return
-  // 以 arrived 为准；navigating→idle 仅作丢包兜底，且必须靠近当前目标
+  // 新 goal 发出后必须先进入 navigating，再认 arrived（避免旧 arrived / 防抖吞掉到点）
+  if (state === 'navigating') {
+    navArmed = true
+    return
+  }
+  if (!navArmed) return
   const hit = state === 'arrived' || (prev === 'navigating' && state === 'idle')
   if (!hit) return
-  const now = Date.now()
-  if (now - lastAdvanceAt < 800) return
+  // 忽略发 goal 后极短时间内的抖动
+  if (Date.now() - goalSentAt < 200) return
   if (!nearCurrentGoal()) return
-  lastAdvanceAt = now
-  setTimeout(() => advance({ fromNav: true }), 150)
+  navArmed = false
+  lastAdvanceAt = Date.now()
+  setTimeout(() => advance({ fromNav: true }), 120)
 })
 
 watch(() => loadedMapId?.value, () => {
@@ -559,6 +637,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   lastAdvanceAt = 0
+  navArmed = false
+  stopStuckWatch()
   if (ensureGoalTimer) {
     clearTimeout(ensureGoalTimer)
     ensureGoalTimer = null

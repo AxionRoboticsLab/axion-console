@@ -19,6 +19,10 @@ export const useRobotRuntime = defineStore('robot-runtime', {
     /** idle | navigating | patrol | paused | offline */
     workState: 'idle',
     navState: 'idle',
+    /** 急停（来自 /robot_status.estop 或本地下发后的乐观更新） */
+    estop: false,
+    locOk: true,
+    edgeHit: false,
     /** 最近一次收到 /robot_status 的时间 */
     lastStatusAt: 0,
     source: 'idle'
@@ -73,8 +77,15 @@ export const useRobotRuntime = defineStore('robot-runtime', {
       else this.online = true
       if (data.work_state) this.workState = String(data.work_state)
       if (data.nav_state) this.navState = String(data.nav_state)
+      if (data.estop != null) this.estop = Boolean(data.estop)
+      if (data.loc_ok != null) this.locOk = Boolean(data.loc_ok)
+      if (data.edge_hit != null) this.edgeHit = Boolean(data.edge_hit)
       this.lastStatusAt = Date.now()
       this.source = 'ros'
+    },
+
+    setEstop (v) {
+      this.estop = Boolean(v)
     },
 
     /** 本地巡检态覆盖（不改电量，电量以 topic 为准） */

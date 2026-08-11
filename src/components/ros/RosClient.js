@@ -60,6 +60,9 @@ function createRosClient () {
     if (topic === '/robot_pose' || topic === '/goal_pose' || topic === '/charge_pose') {
       return isRos2() ? 'geometry_msgs/msg/PoseStamped' : 'geometry_msgs/PoseStamped'
     }
+    if (topic === '/estop') {
+      return isRos2() ? 'std_msgs/msg/Bool' : 'std_msgs/Bool'
+    }
     if (topic === '/initialpose') {
       return isRos2()
         ? 'geometry_msgs/msg/PoseWithCovarianceStamped'
@@ -123,6 +126,7 @@ function createRosClient () {
       rosClient.advertise('/initialpose')
       rosClient.advertise('/goal_pose')
       rosClient.advertise('/charge_pose')
+      rosClient.advertise('/estop')
       rosClient.subscribe('/robot_status')
       robotRuntime.setOnline(true)
       Notify.create({ type: 'positive', message: t('notify_ros_connect') })

@@ -191,6 +191,10 @@
 
     <GlobalPatrolDriver v-if="auth.isAuthenticated"/>
     <GlobalAlarmListener v-if="auth.isAuthenticated"/>
+    <RobotStatusBuoy
+      v-if="auth.isAuthenticated && showRobotStatusBuoy"
+      @open-detail="statusOpen = true"
+    />
     <RobotStatusDialog v-model="statusOpen"/>
   </q-layout>
 </template>
@@ -202,6 +206,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import GlobalPatrolDriver from 'components/map-pose/GlobalPatrolDriver.vue'
 import GlobalAlarmListener from 'components/alarms/GlobalAlarmListener.vue'
+import RobotStatusBuoy from 'components/robot/RobotStatusBuoy.vue'
 import RobotStatusDialog from 'components/common/RobotStatusDialog.vue'
 import { useAuthStore } from 'stores/auth'
 import { useRobotRuntime } from 'stores/robot-runtime'
@@ -220,6 +225,12 @@ const auth = useAuthStore()
 const runtime = useRobotRuntime()
 const statusOpen = ref(false)
 const { localeMenu, setLocale } = useLocaleSwitch()
+
+/** 仅机器人模块展示状态浮标；VMS / 自动测试 / 用户中心不展示 */
+const showRobotStatusBuoy = computed(() => {
+  const p = route.path || ''
+  return p === '/robot' || p.startsWith('/robot/')
+})
 
 const homeMenu = computed(() =>
   (auth.menus || []).find((m) => m.name === 'home' || m.path === '/')

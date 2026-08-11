@@ -37,6 +37,8 @@ let claimTimer = null
 let returningHome = false
 let chargePoint = null
 let activeMapId = null
+let navArmed = false
+let goalSentAt = 0
 
 const CHARGE_NEAR_M = 0.35
 const ARRIVE_NEAR_M = 0.45
@@ -82,14 +84,34 @@ function quatFromYaw (yaw) {
 }
 
 function publishGoal (point) {
-  if (!point?.pose) return
+  if (!point) return
+  let pose = point.pose
+  if (!pose?.position) {
+    const x = Number(point.x)
+    const y = Number(point.y)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    const yaw = Number(point.yaw) || 0
+    pose = {
+      position: { x, y, z: 0 },
+      orientation: quatFromYaw(yaw)
+    }
+  }
+  // 急停只由 UI「解除急停」控制，发 goal 不再自动清急停
+  navArmed = false
+  goalSentAt = Date.now()
+  const sent = goalSentAt
   ros.publish('/goal_pose', {
     header: stampHeader(),
     pose: {
-      position: { ...point.pose.position },
-      orientation: { ...point.pose.orientation }
+      position: { ...pose.position },
+      orientation: { ...(pose.orientation || { x: 0, y: 0, z: 0, w: 1 }) }
     }
   })
+  setTimeout(() => {
+    if (!mission.active || mission.paused) return
+    if (goalSentAt !== sent) return
+    navArmed = true
+  }, 350)
 }
 
 function chargeAsGoal () {
@@ -262,7 +284,6 @@ function advance ({ fromNav = false } = {}) {
     return
   }
   mission.setIndex(next)
-  lastAdvanceAt = Date.now()
   void syncRunAction('progress', { progress_index: next })
   const point = mission.ordered[next]
   publishGoal(point)
@@ -356,13 +377,18 @@ watch(
   (state, prev) => {
     if (onMonitor.value) return
     if (!mission.active || mission.paused || !mission.driveLocal) return
+    if (state === 'navigating') {
+      navArmed = true
+      return
+    }
+    if (!navArmed) return
     const hit = state === 'arrived' || (prev === 'navigating' && state === 'idle')
     if (!hit) return
-    const now = Date.now()
-    if (now - lastAdvanceAt < 800) return
+    if (Date.now() - goalSentAt < 200) return
     if (!nearCurrentGoal()) return
-    lastAdvanceAt = now
-    setTimeout(() => advance({ fromNav: true }), 150)
+    navArmed = false
+    lastAdvanceAt = Date.now()
+    setTimeout(() => advance({ fromNav: true }), 120)
   }
 )
 

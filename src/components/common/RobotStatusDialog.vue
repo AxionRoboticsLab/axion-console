@@ -56,6 +56,14 @@
                 <q-item-section side>{{ workStateLabel }}</q-item-section>
               </q-item>
               <q-item>
+                <q-item-section>{{ t('robot_estop') }}</q-item-section>
+                <q-item-section side>
+                  <q-badge :color="runtime.estop ? 'negative' : 'positive'">
+                    {{ runtime.estop ? t('robot_estop') : t('robot_estop_clear') }}
+                  </q-badge>
+                </q-item-section>
+              </q-item>
+              <q-item>
                 <q-item-section>{{ t('robot_battery') }}</q-item-section>
                 <q-item-section side>{{ runtime.batteryLabel }}</q-item-section>
               </q-item>
